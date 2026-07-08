@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import type { Compositor } from '../../vs/compositor';
+import type { Compositor, SpotlightRender } from '../../vs/compositor';
 import type { MarkerRepository } from '../../vs/highlighter';
 import type { MarkersViewFeature } from '../../vs/markersView';
 
@@ -247,6 +247,158 @@ suite('SightRead integration', () => {
     assert.ok(spot1, 'level-1 spotlight state missing');
     assert.deepStrictEqual(spot1.lit, [{ start: 0, end: 10 }], 'level 1 lights the whole function');
     await vscode.commands.executeCommand('sightread.spotlightOff');
+  });
+
+  // A local function defined inside another function: the definition header and
+  // the call sites must spotlight each other (both directions).
+  suite('spotlight over a nested local function', () => {
+    const NESTED_FN_SOURCE = [
+      'function outer() {', //      0
+      '  const a = 1;', //          1
+      '',
+      '  function inner(x) {', //   3
+      '    return x + 1;', //       4
+      '  }', //                     5
+      '',
+      '  const b = inner(a);', //   7
+      '  return b;', //             8
+      '}', //                       9
+      '',
+    ].join('\n');
+
+    const covers = (ranges: { start: number; end: number }[], line: number): boolean =>
+      ranges.some((r) => r.start <= line && line <= r.end);
+
+    /** Puts the cursor inside `word` on `line`, at level Seg+Var, and polls the
+     *  spotlight state until `done` holds (the JS language service needs to warm up). */
+    async function spotlightAt(
+      api: TestApi,
+      doc: vscode.TextDocument,
+      editor: vscode.TextEditor,
+      line: number,
+      word: string,
+      done: (spot: SpotlightRender) => boolean,
+    ): Promise<SpotlightRender | undefined> {
+      const col = doc.lineAt(line).text.indexOf(word) + 1;
+      await vscode.commands.executeCommand('sightread.spotlightOff');
+      await vscode.commands.executeCommand('sightread.spotlightCycle'); // Off → Seg+Var
+      let spot;
+      for (let i = 0; i < 100; i++) {
+        editor.selection = new vscode.Selection(line, col, line, col);
+        await vscode.commands.executeCommand('cursorMove', { to: 'right' });
+        await sleep(200);
+        spot = api._test.compositor.getTransient(doc.uri)?.spotlight;
+        if (spot && done(spot)) {
+          break;
+        }
+      }
+      await vscode.commands.executeCommand('sightread.spotlightOff');
+      return spot;
+    }
+
+    test('cursor on the definition header keeps the outer function scope and lights the call site', async function () {
+      this.timeout(30000);
+      const api = await getApi();
+      const doc = await vscode.workspace.openTextDocument({
+        content: NESTED_FN_SOURCE,
+        language: 'javascript',
+      });
+      const editor = await vscode.window.showTextDocument(doc);
+
+      const spot = await spotlightAt(
+        api,
+        doc,
+        editor,
+        3,
+        'inner',
+        (s) => s.fn.start === 0 && covers(s.lit, 7),
+      );
+      assert.ok(spot, 'spotlight state was never computed');
+      assert.deepStrictEqual(
+        spot.fn,
+        { start: 0, end: 9 },
+        `definition header must scope to the outer function, got ${JSON.stringify(spot.fn)}`,
+      );
+      assert.ok(
+        covers(spot.lit, 7),
+        `call-site line 7 should be lit at Seg+Var, got ${JSON.stringify(spot.lit)}`,
+      );
+      assert.ok(covers(spot.lit, 3), 'the definition segment itself should be lit');
+    });
+
+    test('calling a sibling local function lights its definition as an island', async function () {
+      this.timeout(30000);
+      const api = await getApi();
+      const doc = await vscode.workspace.openTextDocument({
+        content: [
+          'function outer() {', //       0
+          '  function inner2(y) {', //   1
+          '    return y * 2;', //        2
+          '  }', //                      3
+          '',
+          '  function inner1(x) {', //   5
+          '    const a = x + 1;', //     6
+          '    return inner2(a);', //    7
+          '  }', //                      8
+          '',
+          '  return inner1(1);', //      10
+          '}', //                        11
+          '',
+        ].join('\n'),
+        language: 'javascript',
+      });
+      const editor = await vscode.window.showTextDocument(doc);
+
+      const spot = await spotlightAt(
+        api,
+        doc,
+        editor,
+        7,
+        'inner2',
+        (s) => s.fn.start === 5 && covers(s.lit, 1),
+      );
+      assert.ok(spot, 'spotlight state was never computed');
+      assert.deepStrictEqual(
+        spot.fn,
+        { start: 5, end: 8 },
+        'the anchor stays on inner1 — the island must not widen the function scope',
+      );
+      assert.ok(
+        covers(spot.lit, 1) && covers(spot.lit, 2),
+        `inner2's definition should be lit as an island, got ${JSON.stringify(spot.lit)}`,
+      );
+      assert.ok(covers(spot.lit, 7), 'the cursor segment itself should be lit');
+      assert.ok(
+        !covers(spot.lit, 10) && !covers(spot.light, 10),
+        'unrelated outer-function lines stay heavily dimmed',
+      );
+    });
+
+    test('cursor on the call site lights the nested function definition', async function () {
+      this.timeout(30000);
+      const api = await getApi();
+      const doc = await vscode.workspace.openTextDocument({
+        content: NESTED_FN_SOURCE,
+        language: 'javascript',
+      });
+      const editor = await vscode.window.showTextDocument(doc);
+
+      const spot = await spotlightAt(
+        api,
+        doc,
+        editor,
+        7,
+        'inner',
+        (s) => s.fn.start === 0 && covers(s.lit, 3),
+      );
+      assert.ok(spot, 'spotlight state was never computed');
+      assert.deepStrictEqual(spot.fn, { start: 0, end: 9 }, 'call site scopes to the outer function');
+      assert.ok(
+        covers(spot.lit, 3) && covers(spot.lit, 4),
+        `definition lines should be lit at Seg+Var, got ${JSON.stringify(spot.lit)}`,
+      );
+      assert.ok(covers(spot.lit, 7), 'the cursor segment itself should be lit');
+    });
   });
 
   test('spotlight cycles through levels without error', async () => {

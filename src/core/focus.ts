@@ -94,11 +94,29 @@ export function pathToLine(nodes: SegmentNode[], line: number): SegmentNode[] {
   return [];
 }
 
+/** Deepest segment containing each line; lines outside any segment are ignored. */
+export function segmentsAtLines(tree: SegmentNode[], lines: number[]): LineRange[] {
+  const out: LineRange[] = [];
+  for (const line of lines) {
+    const path = pathToLine(tree, line);
+    const node = path[path.length - 1];
+    if (node) {
+      out.push({ start: node.startLine, end: node.endLine });
+    }
+  }
+  return out;
+}
+
 /**
  * Computes the focus tiers. Returns empty tiers at level 0; degrades to
  * whole-function lighting when the tree is missing or the cursor sits in a
  * gap between top-level segments. Ancestor header lines (and the function
  * header) stay fully lit as context anchors.
+ *
+ * At level 3, occurrences OUTSIDE `fn` light their segment in `outerTree`
+ * (the outermost enclosing function) as related islands — this is how a local
+ * function's definition lights up from a call site inside a sibling local
+ * function, and vice versa for closure variables.
  */
 export function computeFocus(
   level: SpotlightLevel,
@@ -106,16 +124,24 @@ export function computeFocus(
   tree: SegmentNode[],
   cursorLine: number,
   occurrenceLines: number[],
+  outerTree: SegmentNode[] = [],
 ): FocusTiers {
   if (level === 0) {
     return { lit: [], light: [] };
   }
+  const islands =
+    level === 3
+      ? segmentsAtLines(
+          outerTree,
+          occurrenceLines.filter((l) => l < fn.start || l > fn.end),
+        )
+      : [];
   if (level === 1 || tree.length === 0) {
-    return { lit: [fn], light: [] };
+    return { lit: mergeLineRanges([fn, ...islands]), light: [] };
   }
   const path = pathToLine(tree, cursorLine);
   if (path.length === 0) {
-    return { lit: [fn], light: [] };
+    return { lit: mergeLineRanges([fn, ...islands]), light: [] };
   }
   const node = path[path.length - 1];
   const lit: LineRange[] = [
@@ -124,13 +150,7 @@ export function computeFocus(
     { start: node.startLine, end: node.endLine },
   ];
   if (level === 3) {
-    for (const line of occurrenceLines) {
-      const occPath = pathToLine(tree, line);
-      const occNode = occPath[occPath.length - 1];
-      if (occNode) {
-        lit.push({ start: occNode.startLine, end: occNode.endLine });
-      }
-    }
+    lit.push(...segmentsAtLines(tree, occurrenceLines), ...islands);
   }
   const siblings = (path.length >= 2 ? path[path.length - 2].children : tree).filter(
     (s) => s !== node,

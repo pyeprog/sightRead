@@ -45,12 +45,13 @@ export class SpotlightController {
     tree: DocSegmentNode[],
     cursorLine: number,
     occurrenceLines: number[],
+    outerTree: DocSegmentNode[] = [],
   ): SpotlightRender | undefined {
     if (this.level === 0 || !fn) {
       return undefined;
     }
     const fnRange: LineRange = { start: fn.range.start.line, end: fn.range.end.line };
-    const tiers = computeFocus(this.level, fnRange, tree, cursorLine, occurrenceLines);
+    const tiers = computeFocus(this.level, fnRange, tree, cursorLine, occurrenceLines, outerTree);
     return { fn: fnRange, lit: tiers.lit, light: tiers.light };
   }
 }

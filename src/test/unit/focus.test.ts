@@ -5,6 +5,7 @@ import {
   mergeLineRanges,
   pathToLine,
   rangeContaining,
+  segmentsAtLines,
   subtractRangeList,
   subtractRanges,
 } from '../../core/focus';
@@ -192,6 +193,76 @@ suite('focus: computeFocus over the segment tree', () => {
         { start: 16, end: 18 },
       ],
       light: [{ start: 20, end: 23 }],
+    });
+  });
+
+  test('segmentsAtLines returns the deepest segment per line, ignoring gaps', () => {
+    assert.deepStrictEqual(segmentsAtLines(tree, [13, 21, 15]), [
+      { start: 12, end: 14 },
+      { start: 21, end: 22 },
+    ]);
+  });
+});
+
+suite('focus: related islands outside the function (nested local functions)', () => {
+  // The outer function spans 0..40; the anchor fn is a nested function at 10..30.
+  // The outer tree holds a sibling nested definition at 2..6 and a statement at 34..36.
+  const fn = { start: 10, end: 30 };
+  const tree = [n(12, 14), n(16, 24)];
+  const outerTree = [n(2, 6, [n(3, 5)]), n(10, 30), n(34, 36)];
+
+  test('level 3: an occurrence outside fn lights its segment in the outer tree as an island', () => {
+    assert.deepStrictEqual(computeFocus(3, fn, tree, 13, [2, 13], outerTree), {
+      lit: [
+        { start: 2, end: 6 },
+        { start: 10, end: 10 },
+        { start: 12, end: 14 },
+      ],
+      light: [{ start: 16, end: 24 }],
+    });
+  });
+
+  test('islands appear only at level 3', () => {
+    assert.deepStrictEqual(computeFocus(2, fn, tree, 13, [2, 13], outerTree), {
+      lit: [
+        { start: 10, end: 10 },
+        { start: 12, end: 14 },
+      ],
+      light: [{ start: 16, end: 24 }],
+    });
+    assert.deepStrictEqual(computeFocus(1, fn, tree, 13, [2, 13], outerTree), {
+      lit: [fn],
+      light: [],
+    });
+  });
+
+  test('level 3 without an outer tree ignores outside occurrences (top-level function)', () => {
+    assert.deepStrictEqual(computeFocus(3, fn, tree, 13, [2, 13]), {
+      lit: [
+        { start: 10, end: 10 },
+        { start: 12, end: 14 },
+      ],
+      light: [{ start: 16, end: 24 }],
+    });
+  });
+
+  test('degraded whole-function lighting keeps the islands', () => {
+    assert.deepStrictEqual(computeFocus(3, fn, [], 13, [2], outerTree), {
+      lit: [
+        { start: 2, end: 6 },
+        { start: 10, end: 30 },
+      ],
+      light: [],
+    });
+  });
+
+  test('an occurrence outside fn and outside any outer segment stays dark', () => {
+    assert.deepStrictEqual(computeFocus(3, fn, tree, 13, [8], outerTree), {
+      lit: [
+        { start: 10, end: 10 },
+        { start: 12, end: 14 },
+      ],
+      light: [{ start: 16, end: 24 }],
     });
   });
 });

@@ -10,7 +10,7 @@ export interface TintOccurrence {
 
 export interface SpotlightRender {
   fn: LineRange;
-  /** fully lit */
+  /** fully lit; may extend outside `fn` (related islands at Seg+Var) */
   lit: LineRange[];
   /** lightly dimmed (siblings tier); disjoint from `lit` */
   light: LineRange[];
@@ -141,9 +141,9 @@ export class Compositor implements vscode.Disposable {
       return new vscode.Range(r.start, 0, end, doc.lineAt(end).text.length);
     };
 
-    // spotlight dim layers (heavy: outside fn, medium: non-related, light: siblings)
+    // spotlight dim layers (heavy: outside fn minus lit islands, medium: non-related, light: siblings)
     if (spot) {
-      const heavy = subtractRanges({ start: 0, end: lastLine }, [spot.fn]);
+      const heavy = subtractRanges({ start: 0, end: lastLine }, [spot.fn, ...spot.lit]);
       const light = spot.light.filter((r) => r.start <= lastLine);
       const medium = subtractRanges(
         { start: spot.fn.start, end: Math.min(spot.fn.end, lastLine) },

@@ -11,7 +11,7 @@ import { SegmentsViewFeature, registerGoToSegment } from './vs/segmentsView';
 import { registerSkeletonFoldCommands } from './vs/skeletonFold';
 import { SpotlightController } from './vs/spotlight';
 import { computeTint } from './vs/variableTint';
-import { findEnclosingFunction } from './vs/symbols';
+import { findEnclosingFunctions } from './vs/symbols';
 import { SPOTLIGHT_LEVEL_NAMES } from './core/focus';
 
 const REFRESH_DEBOUNCE_MS = 120;
@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     const doc = editor.document;
     const pos = editor.selection.active;
 
-    const fn = await findEnclosingFunction(doc, pos);
+    const { fn, outermost } = await findEnclosingFunctions(doc, pos);
     if (token !== pipelineToken) {
       return;
     }
@@ -59,17 +59,25 @@ export function activate(context: vscode.ExtensionContext): unknown {
       .getConfiguration('sightread')
       .get('variableTint.enabled', true);
     const tint =
-      tintEnabled && editor.selection.isEmpty ? await computeTint(doc, pos, fn) : [];
+      tintEnabled && editor.selection.isEmpty
+        ? await computeTint(doc, pos, outermost ?? fn)
+        : [];
     if (token !== pipelineToken) {
       return;
     }
     const segments = fn ? segmentCache.get(doc, fn.range) : [];
     segmentsView.update(doc, fn, segments);
+    // occurrences outside fn light their segment of the outermost function as islands
+    const outerTree =
+      fn && outermost && !outermost.range.isEqual(fn.range)
+        ? segmentCache.get(doc, outermost.range)
+        : [];
     const spot = spotlight.compute(
       fn,
       segments,
       pos.line,
       tint.map((t) => t.range.start.line),
+      outerTree,
     );
     compositor.setTransient(doc.uri, { tint, spotlight: spot });
     compositor.clearTransientExcept(doc.uri);

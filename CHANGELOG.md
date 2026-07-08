@@ -2,6 +2,11 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [Unreleased]
+
+- **Fix: spotlight over nested local functions** — with the cursor on a nested function's definition header, the spotlight used to scope to the nested function itself, heavily dimming its call sites in the outer function at every level. The definition header line now reads as a statement of the outer function, so a local definition and its call sites spotlight each other in both directions (cursor in the nested body still focuses the nested function).
+- **Seg+Var: related islands outside the current function** — occurrences of the symbol under the cursor that live outside the innermost function (a sibling local function's definition, a closure variable's declaration) now light their segment of the outermost enclosing function as fully-lit islands, while the anchor function keeps its normal four-tier focus. Variable tint occurrences are accordingly clipped to the outermost enclosing function instead of the innermost one.
+
 ## [1.0.0] — 2026-07-08
 
 Initial release.

@@ -11,14 +11,16 @@ function escapeRegExp(s: string): string {
 
 /**
  * Computes the transient tint occurrences for the symbol under the cursor,
- * clipped to the enclosing function (design.md §3.3). Prefers the language's
+ * clipped to `scope` — the OUTERMOST enclosing function (design.md §3.3), so
+ * that a symbol inside a nested function still reaches its definition or
+ * closure uses in the outer function. Prefers the language's
  * document-highlight provider (which distinguishes read/write); falls back to
  * word-boundary text matching when no provider responds.
  */
 export async function computeTint(
   doc: vscode.TextDocument,
   pos: vscode.Position,
-  fn: FunctionInfo | undefined,
+  scope: FunctionInfo | undefined,
 ): Promise<TintOccurrence[]> {
   const wordRange = doc.getWordRangeAtPosition(pos);
   if (!wordRange) {
@@ -42,12 +44,12 @@ export async function computeTint(
     // no provider for this language — fall through to text matching
   }
 
-  if (occurrences.length === 0 && fn) {
+  if (occurrences.length === 0 && scope) {
     const word = doc.getText(wordRange);
     if (IDENTIFIER_RE.test(word)) {
       const re = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'g');
-      const lastLine = Math.min(fn.range.end.line, doc.lineCount - 1);
-      outer: for (let line = fn.range.start.line; line <= lastLine; line++) {
+      const lastLine = Math.min(scope.range.end.line, doc.lineCount - 1);
+      outer: for (let line = scope.range.start.line; line <= lastLine; line++) {
         for (const match of doc.lineAt(line).text.matchAll(re)) {
           occurrences.push({
             range: new vscode.Range(line, match.index!, line, match.index! + word.length),
@@ -61,8 +63,8 @@ export async function computeTint(
     }
   }
 
-  if (fn) {
-    occurrences = occurrences.filter((o) => fn.range.contains(o.range.start));
+  if (scope) {
+    occurrences = occurrences.filter((o) => scope.range.contains(o.range.start));
   }
   return occurrences.slice(0, MAX_OCCURRENCES);
 }
