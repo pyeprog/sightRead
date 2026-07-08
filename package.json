@@ -12,17 +12,290 @@
     "vscode": "^1.80.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "sightread.helloWorld",
-        "title": "SightRead: Hello World"
+        "command": "sightread.foldSkeleton",
+        "title": "SightRead: Fold Skeleton (Current Function)",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "sightread.unfoldSkeleton",
+        "title": "SightRead: Unfold Skeleton (Current Function)",
+        "icon": "$(unfold)"
+      },
+      {
+        "command": "sightread.mark",
+        "title": "SightRead: Mark Selection…",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "sightread.markYellow",
+        "title": "SightRead: Mark Selection Yellow (key point)",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "sightread.markRed",
+        "title": "SightRead: Mark Selection Red (doubt)",
+        "icon": "$(question)"
+      },
+      {
+        "command": "sightread.markGreen",
+        "title": "SightRead: Mark Selection Green (verified)",
+        "icon": "$(check)"
+      },
+      {
+        "command": "sightread.editMarkerNote",
+        "title": "SightRead: Add/Edit Marker Note"
+      },
+      {
+        "command": "sightread.removeMarkersInSelection",
+        "title": "SightRead: Remove Markers in Selection"
+      },
+      {
+        "command": "sightread.removeMarkersInFunction",
+        "title": "SightRead: Remove Markers in Current Function"
+      },
+      {
+        "command": "sightread.removeMarkersInFile",
+        "title": "SightRead: Remove Markers in File"
+      },
+      {
+        "command": "sightread.removeAllMarkers",
+        "title": "SightRead: Remove All Markers (Workspace)",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "sightread.removeMarker",
+        "title": "SightRead: Remove Marker",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sightread.revealLocation",
+        "title": "SightRead: Reveal Location"
+      },
+      {
+        "command": "sightread.spotlightCycle",
+        "title": "SightRead: Cycle Spotlight Level",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "sightread.spotlightOff",
+        "title": "SightRead: Spotlight Off"
+      },
+      {
+        "command": "sightread.toggleVariableTint",
+        "title": "SightRead: Toggle Variable Tint"
+      },
+      {
+        "command": "sightread.goToSegment",
+        "title": "SightRead: Go to Segment…"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sightread",
+          "title": "SightRead",
+          "icon": "media/sightread.svg"
+        }
+      ]
+    },
+    "views": {
+      "sightread": [
+        {
+          "id": "sightread.segmentsView",
+          "name": "Segments"
+        },
+        {
+          "id": "sightread.markersView",
+          "name": "Markers"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "sightread.menu",
+        "label": "SightRead"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "sightread.removeMarker",
+          "when": "false"
+        },
+        {
+          "command": "sightread.revealLocation",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "sightread.spotlightCycle",
+          "when": "view == sightread.segmentsView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sightread.foldSkeleton",
+          "when": "view == sightread.segmentsView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sightread.unfoldSkeleton",
+          "when": "view == sightread.segmentsView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sightread.markYellow",
+          "when": "view == sightread.markersView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sightread.markRed",
+          "when": "view == sightread.markersView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sightread.markGreen",
+          "when": "view == sightread.markersView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sightread.mark",
+          "when": "view == sightread.markersView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "sightread.removeAllMarkers",
+          "when": "view == sightread.markersView",
+          "group": "1_actions"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sightread.removeMarker",
+          "when": "view == sightread.markersView && viewItem == marker",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "sightread.menu",
+          "group": "1_modification@100"
+        }
+      ],
+      "sightread.menu": [
+        {
+          "command": "sightread.mark",
+          "group": "1_mark@1"
+        },
+        {
+          "command": "sightread.markYellow",
+          "group": "1_mark@2"
+        },
+        {
+          "command": "sightread.markRed",
+          "group": "1_mark@3"
+        },
+        {
+          "command": "sightread.markGreen",
+          "group": "1_mark@4"
+        },
+        {
+          "command": "sightread.editMarkerNote",
+          "group": "1_mark@5"
+        },
+        {
+          "command": "sightread.removeMarkersInSelection",
+          "group": "2_remove@1"
+        },
+        {
+          "command": "sightread.removeMarkersInFunction",
+          "group": "2_remove@2"
+        },
+        {
+          "command": "sightread.foldSkeleton",
+          "group": "3_view@1"
+        },
+        {
+          "command": "sightread.unfoldSkeleton",
+          "group": "3_view@2"
+        },
+        {
+          "command": "sightread.spotlightCycle",
+          "group": "3_view@3"
+        },
+        {
+          "command": "sightread.goToSegment",
+          "group": "3_view@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SightRead",
+      "properties": {
+        "sightread.variableTint.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Outline all occurrences of the symbol under the cursor within the enclosing function (reads blue, writes orange)."
+        },
+        "sightread.spotlight.defaultLevel": {
+          "type": "number",
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "enumDescriptions": [
+            "Off",
+            "Function — dim everything outside the current function",
+            "Segment — additionally dim non-current segments inside the function",
+            "Segment+Variable — also keep segments touched by the symbol under the cursor lit"
+          ],
+          "default": 0,
+          "description": "Spotlight level applied on startup."
+        },
+        "sightread.spotlight.functionDimOpacity": {
+          "type": "number",
+          "default": 0.15,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of code outside the current function while the spotlight is on."
+        },
+        "sightread.spotlight.segmentDimOpacity": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of non-related parts of the current function (spotlight level 2+)."
+        },
+        "sightread.spotlight.siblingDimOpacity": {
+          "type": "number",
+          "default": 0.6,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Opacity of sibling segments of the cursor's segment (spotlight level 2+)."
+        },
+        "sightread.marker.notePosition": {
+          "type": "string",
+          "enum": [
+            "lineStart",
+            "lineEnd"
+          ],
+          "default": "lineEnd",
+          "description": "Where a marker's note is rendered on the first marked line. lineStart shifts the code of that line to the right."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -36,7 +309,8 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\""
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -48,6 +322,7 @@
     "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.28.1",
     "eslint": "^9.16.0",
+    "mocha": "^10.8.2",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.7.2"
   }

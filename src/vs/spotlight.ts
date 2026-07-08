@@ -1,0 +1,48 @@
+import * as vscode from 'vscode';
+import { LineRange, SpotlightLevel, computeFocus } from '../core/focus';
+import { SpotlightRender } from './compositor';
+import { DocSegmentNode } from './segmentCache';
+import { FunctionInfo } from './symbols';
+
+/**
+ * Spotlight mode state (design.md §3.5): one mode, three levels, cursor-driven,
+ * four brightness tiers over the recursive segment tree. The focus computation
+ * itself lives in core/focus.ts. Level display lives on the SightRead view
+ * container badge (see SegmentsViewFeature), not in the status bar.
+ */
+export class SpotlightController {
+  private level: SpotlightLevel;
+
+  constructor() {
+    const configured = vscode.workspace
+      .getConfiguration('sightread')
+      .get('spotlight.defaultLevel', 0);
+    this.level = Math.min(3, Math.max(0, Math.round(configured))) as SpotlightLevel;
+  }
+
+  get currentLevel(): SpotlightLevel {
+    return this.level;
+  }
+
+  cycle(): void {
+    this.level = (((this.level as number) + 1) % 4) as SpotlightLevel;
+  }
+
+  off(): void {
+    this.level = 0;
+  }
+
+  compute(
+    fn: FunctionInfo | undefined,
+    tree: DocSegmentNode[],
+    cursorLine: number,
+    occurrenceLines: number[],
+  ): SpotlightRender | undefined {
+    if (this.level === 0 || !fn) {
+      return undefined;
+    }
+    const fnRange: LineRange = { start: fn.range.start.line, end: fn.range.end.line };
+    const tiers = computeFocus(this.level, fnRange, tree, cursorLine, occurrenceLines);
+    return { fn: fnRange, lit: tiers.lit, light: tiers.light };
+  }
+}
