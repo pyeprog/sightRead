@@ -122,6 +122,13 @@ export class SegmentsViewFeature
     );
     item.id = `${el.uriString}:${el.node.startLine}-${el.node.endLine}:g${this.generation}`;
     item.iconPath = segmentIcon(el.node.kind);
+    item.description = el.node.detail;
+    const doc = vscode.workspace.textDocuments.find(
+      (d) => d.uri.toString() === el.uriString,
+    );
+    if (doc && el.node.startLine < doc.lineCount) {
+      item.tooltip = doc.lineAt(el.node.startLine).text.trim();
+    }
     item.command = {
       command: 'sightread.revealLocation',
       title: 'Reveal',
@@ -179,6 +186,7 @@ export function registerGoToSegment(
       const picked = await vscode.window.showQuickPick(
         flat.map((f) => ({
           label: `${' '.repeat(f.depth)}${f.node.name}`,
+          description: f.node.detail,
           segment: f.node,
         })),
         { placeHolder: `Segments of ${fn.name}` },

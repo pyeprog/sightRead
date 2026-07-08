@@ -12,6 +12,7 @@ import { registerSkeletonFoldCommands } from './vs/skeletonFold';
 import { SpotlightController } from './vs/spotlight';
 import { computeTint } from './vs/variableTint';
 import { findEnclosingFunction } from './vs/symbols';
+import { SPOTLIGHT_LEVEL_NAMES } from './core/focus';
 
 const REFRESH_DEBOUNCE_MS = 120;
 
@@ -23,7 +24,21 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const markersView = new MarkersViewFeature(repo, compositor);
   const segmentsView = new SegmentsViewFeature();
   context.subscriptions.push(compositor, markersView, segmentsView);
-  const syncSpotlightBadge = (): void => segmentsView.setSpotlightLevel(spotlight.currentLevel);
+  const spotlightStatus = vscode.window.createStatusBarItem(
+    'sightread.spotlight',
+    vscode.StatusBarAlignment.Right,
+    100,
+  );
+  spotlightStatus.name = 'SightRead Spotlight';
+  spotlightStatus.command = 'sightread.spotlightCycle';
+  spotlightStatus.tooltip = 'SightRead spotlight — click to cycle (Off → Seg+Var → Seg → Fn)';
+  context.subscriptions.push(spotlightStatus);
+  const syncSpotlightUi = (): void => {
+    const level = spotlight.currentLevel;
+    segmentsView.setSpotlightLevel(level);
+    spotlightStatus.text = `$(${level === 0 ? 'eye-closed' : 'eye'}) ${SPOTLIGHT_LEVEL_NAMES[level]}`;
+  };
+  spotlightStatus.show();
 
   // ---- the single cursor pipeline (design.md §四) ----------------------------
   // selection change → enclosing function → tint → segments → focus → render.
@@ -82,12 +97,12 @@ export function activate(context: vscode.ExtensionContext): unknown {
   context.subscriptions.push(
     vscode.commands.registerCommand('sightread.spotlightCycle', () => {
       spotlight.cycle();
-      syncSpotlightBadge();
+      syncSpotlightUi();
       scheduleRefresh();
     }),
     vscode.commands.registerCommand('sightread.spotlightOff', () => {
       spotlight.off();
-      syncSpotlightBadge();
+      syncSpotlightUi();
       scheduleRefresh();
     }),
     vscode.commands.registerCommand('sightread.toggleVariableTint', async () => {
@@ -142,7 +157,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     }),
   );
 
-  syncSpotlightBadge();
+  syncSpotlightUi();
   compositor.renderVisible();
   scheduleRefresh();
 

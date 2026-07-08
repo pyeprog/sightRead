@@ -15,7 +15,7 @@ suite('segmentation: structural naming', () => {
     assert.deepStrictEqual(shape(t), [
       [0, 1, 'assignment', 'a=.. b=..', []],
       [3, 3, 'assignment', 'c=..', []],
-      [5, 5, 'flow', 'return ...', []],
+      [5, 5, 'flow', 'return', []],
     ]);
   });
 
@@ -39,15 +39,15 @@ suite('segmentation: structural naming', () => {
     const t = tree('const x = 1;', 'if (x) {', '  doA();', '  doB();', '}', 'const y = 2;');
     assert.deepStrictEqual(shape(t), [
       [0, 0, 'assignment', 'x=..', []],
-      [1, 4, 'branch', 'if ...', [[2, 3, 'call', 'doA() doB()', []]]],
+      [1, 4, 'branch', 'if', [[2, 3, 'call', 'doA() doB()', []]]],
       [5, 5, 'assignment', 'y=..', []],
     ]);
   });
 
-  test('if/else chain is one node named if ... else ..., branches become children', () => {
+  test('if/else chain is one node named if/else, branches become children', () => {
     const t = tree('if (a) {', '  x();', '} else {', '  y();', '}');
     assert.strictEqual(t.length, 1);
-    assert.strictEqual(t[0].name, 'if ... else ...');
+    assert.strictEqual(t[0].name, 'if/else');
     assert.deepStrictEqual(shape(t[0].children), [
       [1, 1, 'call', 'x()', []],
       [3, 3, 'call', 'y()', []],
@@ -66,27 +66,27 @@ suite('segmentation: structural naming', () => {
       '    w()',
     );
     assert.strictEqual(t.length, 1);
-    assert.strictEqual(t[0].name, 'if ... elif{2} ... else ...');
+    assert.strictEqual(t[0].name, 'if/elif{2}/else');
     assert.strictEqual(t[0].children.length, 4);
   });
 
   test('js else-if uses the language keyword', () => {
     const t = tree('if (a) {', '  x();', '} else if (b) {', '  y();', '} else {', '  z();', '}');
-    assert.strictEqual(t[0].name, 'if ... else if ... else ...');
+    assert.strictEqual(t[0].name, 'if/else if/else');
   });
 
   test('try/except/finally', () => {
     const t = tree('try:', '    x()', 'except ValueError:', '    y()', 'finally:', '    z()');
     assert.strictEqual(t[0].kind, 'try');
-    assert.strictEqual(t[0].name, 'try ... except ... finally ...');
+    assert.strictEqual(t[0].name, 'try/except/finally');
   });
 
   test('loop and with keywords', () => {
-    assert.strictEqual(tree('for (const x of xs) {', '  use(x);', '}')[0].name, 'for ...');
-    assert.strictEqual(tree('while (a) {', '  b();', '}')[0].name, 'while ...');
+    assert.strictEqual(tree('for (const x of xs) {', '  use(x);', '}')[0].name, 'for');
+    assert.strictEqual(tree('while (a) {', '  b();', '}')[0].name, 'while');
     const w = tree('with open(p) as f:', '    read(f)', '    parse(f)');
     assert.strictEqual(w[0].kind, 'with');
-    assert.strictEqual(w[0].name, 'with ...');
+    assert.strictEqual(w[0].name, 'with');
   });
 
   test('definitions keep the language keyword and the name', () => {
@@ -98,8 +98,8 @@ suite('segmentation: structural naming', () => {
 
   test('recursion: nested blocks become descendants', () => {
     const t = tree('if (a) {', '  for (const x of xs) {', '    handle(x);', '  }', '}');
-    assert.strictEqual(t[0].name, 'if ...');
-    assert.strictEqual(t[0].children[0].name, 'for ...');
+    assert.strictEqual(t[0].name, 'if');
+    assert.strictEqual(t[0].children[0].name, 'for');
     assert.strictEqual(t[0].children[0].children[0].name, 'handle(...)');
   });
 
@@ -164,6 +164,49 @@ suite('segmentation: structural naming', () => {
   test('empty and blank-only input yields no segments', () => {
     assert.deepStrictEqual(segmentTree([]), []);
     assert.deepStrictEqual(segmentTree(['', '  ', '']), []);
+  });
+});
+
+suite('segmentation: header detail', () => {
+  test('if condition becomes the detail, outer parens unwrapped', () => {
+    const t = tree('if (x && y) {', '  a();', '}');
+    assert.strictEqual(t[0].detail, 'x && y');
+  });
+
+  test('loop and with headers keep their expression', () => {
+    assert.strictEqual(tree('for f in files:', '    use(f)')[0].detail, 'f in files');
+    assert.strictEqual(tree('while retries < 3:', '    retry()')[0].detail, 'retries < 3');
+    assert.strictEqual(tree('with open(path) as f:', '    read(f)')[0].detail, 'open(path) as f');
+  });
+
+  test('string literals collapse', () => {
+    const t = tree("if (mode === 'production') {", '  a();', '}');
+    assert.strictEqual(t[0].detail, "mode === '…'");
+  });
+
+  test('depth-2 bracket groups collapse', () => {
+    const t = tree('if (isEnabled(getCtx(env), key)) {', '  a();', '}');
+    assert.strictEqual(t[0].detail, 'isEnabled(getCtx(…), key)');
+  });
+
+  test('token budget cuts long conditions at a token boundary', () => {
+    const t = tree("if (user.role === 'admin' && flags.isEnabled(ctx, 'x')) {", '  a();', '}');
+    assert.strictEqual(t[0].detail, "user.role === '…' && …");
+  });
+
+  test('return value becomes the detail; bare return has none', () => {
+    assert.strictEqual(tree('return cache[key];')[0].detail, 'cache[key]');
+    assert.strictEqual(tree('return;')[0].detail, undefined);
+  });
+
+  test('multi-line header opener yields no detail instead of noise', () => {
+    const t = tree('return {', '  a: 1,', '};');
+    assert.strictEqual(t[0].detail, undefined);
+  });
+
+  test('try segments carry no detail', () => {
+    const t = tree('try:', '    x()', 'except ValueError:', '    y()');
+    assert.strictEqual(t[0].detail, undefined);
   });
 });
 

@@ -215,35 +215,37 @@ suite('SightRead integration', () => {
     editor.selection = new vscode.Selection(1, 8, 1, 8); // inside alpha()
 
     await vscode.commands.executeCommand('sightread.spotlightOff');
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 1: Fn
+    // cycle order is Off → Seg+Var → Seg → Fn
+    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 3: Seg+Var
+    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 2: Seg
 
     // the JS language service may need a while to warm up — poll
-    let spot;
+    let spot2;
     for (let i = 0; i < 100; i++) {
       await sleep(200);
       // nudge the pipeline in case the first runs raced the language service
       editor.selection = new vscode.Selection(1, 8, 1, 8);
       await vscode.commands.executeCommand('cursorMove', { to: 'right' });
-      spot = api._test.compositor.getTransient(doc.uri)?.spotlight;
-      if (spot) {
+      spot2 = api._test.compositor.getTransient(doc.uri)?.spotlight;
+      if (spot2) {
         break;
       }
     }
-    assert.ok(spot, 'spotlight state was never computed (enclosing function not found?)');
-    assert.strictEqual(spot.fn.start, 0, 'function range should start at line 0');
-    assert.strictEqual(spot.fn.end, 10, 'function range should end at the closing brace');
-    assert.deepStrictEqual(spot.lit, [{ start: 0, end: 10 }], 'level 1 lights the whole function');
-
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 2: Seg
-    await sleep(500);
-    const spot2 = api._test.compositor.getTransient(doc.uri)?.spotlight;
-    assert.ok(spot2, 'level-2 spotlight state missing');
+    assert.ok(spot2, 'spotlight state was never computed (enclosing function not found?)');
+    assert.strictEqual(spot2.fn.start, 0, 'function range should start at line 0');
+    assert.strictEqual(spot2.fn.end, 10, 'function range should end at the closing brace');
     assert.ok(spot2.lit.length >= 1, 'level 2 should light at least the cursor segment');
     const litText = JSON.stringify(spot2.lit);
     assert.ok(
       spot2.lit.some((r) => r.start <= 1 && 1 <= r.end),
       `cursor line 1 should be lit at level 2, got ${litText}`,
     );
+
+    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 1: Fn
+    await sleep(500);
+    const spot1 = api._test.compositor.getTransient(doc.uri)?.spotlight;
+    assert.ok(spot1, 'level-1 spotlight state missing');
+    assert.deepStrictEqual(spot1.lit, [{ start: 0, end: 10 }], 'level 1 lights the whole function');
     await vscode.commands.executeCommand('sightread.spotlightOff');
   });
 

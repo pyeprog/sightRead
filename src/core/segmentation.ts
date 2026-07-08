@@ -9,13 +9,15 @@
  *   3. comment/decorator lines bind to the segment that follows them.
  *
  * Naming is structural, never content-copied from comments:
- *   - branches:     `if ... elif{2} ... else ...`
- *   - loops:        `for ...` / `while ...`
- *   - try:          `try ... except ... finally ...`
+ *   - branches:     `if` / `if/elif{2}/else`
+ *   - loops:        `for` / `while`
+ *   - try:          `try/except/finally`
  *   - definitions:  `def foo` / `class Bar` (whatever keyword the language uses)
  *   - assignments:  `a=.. b=..`
  *   - calls:        `shutil.rmtree(...)` / `path.unlink()`
- *   - flow:         `return ...` / `raise ...`
+ *   - flow:         `return` / `raise`
+ * Keyword nodes carry their condensed header expression in `detail` instead,
+ * rendered as dimmed description text by the views.
  */
 
 export type SegmentKind =
@@ -37,6 +39,11 @@ export interface SegmentNode {
   endLine: number;
   name: string;
   kind: SegmentKind;
+  /**
+   * Condensed header expression — the `if` condition, loop header, `return`
+   * value… Rendered as dimmed detail text next to the structural name.
+   */
+  detail?: string;
   children: SegmentNode[];
   /**
    * Lines within this segment (own level only, not descendants) that head an
@@ -55,6 +62,8 @@ export interface SegmentationOptions {
   maxDepth: number;
   /** max `a=..`/`f(...)` tokens in a statement-summary name */
   maxSummaryTokens: number;
+  /** hard character budget for a node's condensed `detail` expression */
+  maxDetailLength: number;
 }
 
 export const DEFAULT_OPTIONS: SegmentationOptions = {
@@ -62,6 +71,7 @@ export const DEFAULT_OPTIONS: SegmentationOptions = {
   maxNameLength: 60,
   maxDepth: 5,
   maxSummaryTokens: 4,
+  maxDetailLength: 30,
 };
 
 const BLANK_RE = /^\s*$/;
@@ -234,6 +244,7 @@ function buildScope(
       endLine: a.end + offset,
       name: summary.name,
       kind: summary.kind,
+      detail: summary.detail,
       children,
       headerLines: headerLinesOf(info, a, offset),
     };
@@ -295,6 +306,7 @@ function childScopes(
 interface Summary {
   kind: SegmentKind;
   name: string;
+  detail?: string;
 }
 
 function summarize(
@@ -318,7 +330,11 @@ function summarize(
     return { kind: 'other', name: `${lead} …` };
   }
   const summary = classify(top, opts);
-  return { kind: summary.kind, name: truncate(summary.name, opts.maxNameLength) };
+  return {
+    kind: summary.kind,
+    name: truncate(summary.name, opts.maxNameLength),
+    detail: summary.detail,
+  };
 }
 
 function classify(top: string[], opts: SegmentationOptions): Summary {
@@ -326,35 +342,39 @@ function classify(top: string[], opts: SegmentationOptions): Summary {
   const kw = first.match(/^([A-Za-z_$][\w$]*)/)?.[1];
 
   if (kw === 'if' || kw === 'unless') {
-    return { kind: 'branch', name: branchName(top) };
+    return { kind: 'branch', name: branchName(top), detail: condenseHeader(first, kw, opts) };
   }
   if (kw === 'for' || kw === 'foreach' || kw === 'while' || kw === 'do' || kw === 'loop') {
-    return { kind: 'loop', name: `${kw} ...` };
+    return { kind: 'loop', name: kw, detail: condenseHeader(first, kw, opts) };
   }
   if (kw === 'with' || kw === 'using') {
-    return { kind: 'with', name: `${kw} ...` };
+    return { kind: 'with', name: kw, detail: condenseHeader(first, kw, opts) };
   }
   if (kw === 'try') {
     return { kind: 'try', name: tryName(top) };
   }
   if (kw === 'switch' || kw === 'match' || kw === 'select') {
-    return { kind: 'switch', name: `${kw} ...` };
+    return { kind: 'switch', name: kw, detail: condenseHeader(first, kw, opts) };
   }
   const def = first.match(DEFINITION_RE);
   if (def) {
-    return { kind: 'definition', name: def[2] ? `${def[1]} ${def[2]}` : `${def[1]} ...` };
+    return { kind: 'definition', name: def[2] ? `${def[1]} ${def[2]}` : def[1] };
   }
   if (kw && FLOW_KEYWORDS.has(kw)) {
     const bare = first.replace(/[;\s]+$/, '') === kw;
-    return { kind: 'flow', name: bare ? kw : `${kw} ...` };
+    return {
+      kind: 'flow',
+      name: kw,
+      detail: bare ? undefined : condenseHeader(first, kw, opts),
+    };
   }
   if (kw === 'import' || kw === 'from' || kw === 'require' || kw === 'include') {
-    return { kind: 'other', name: 'import ...' };
+    return { kind: 'other', name: 'import' };
   }
   return statementSummary(top, opts);
 }
 
-/** `if ...`, `if ... else ...`, `if ... elif{3} ... else ...` */
+/** `if`, `if/else`, `if/elif{3}/else` */
 function branchName(top: string[]): string {
   let elifKw: string | undefined;
   let elifCount = 0;
@@ -371,17 +391,17 @@ function branchName(top: string[]): string {
       hasElse = true;
     }
   }
-  const parts = ['if ...'];
+  const parts = ['if'];
   if (elifCount > 0) {
-    parts.push(`${elifKw}${elifCount > 1 ? `{${elifCount}}` : ''} ...`);
+    parts.push(`${elifKw}${elifCount > 1 ? `{${elifCount}}` : ''}`);
   }
   if (hasElse) {
-    parts.push('else ...');
+    parts.push('else');
   }
-  return parts.join(' ');
+  return parts.join('/');
 }
 
-/** `try ...`, `try ... except ...`, `try ... catch ... finally ...` */
+/** `try`, `try/except`, `try/catch/finally` */
 function tryName(top: string[]): string {
   let catchKw: string | undefined;
   let catchCount = 0;
@@ -398,14 +418,14 @@ function tryName(top: string[]): string {
       hasFinally = true;
     }
   }
-  const parts = ['try ...'];
+  const parts = ['try'];
   if (catchCount > 0) {
-    parts.push(`${catchKw}${catchCount > 1 ? `{${catchCount}}` : ''} ...`);
+    parts.push(`${catchKw}${catchCount > 1 ? `{${catchCount}}` : ''}`);
   }
   if (hasFinally) {
-    parts.push('finally ...');
+    parts.push('finally');
   }
-  return parts.join(' ');
+  return parts.join('/');
 }
 
 /** `a=.. b=.. shutil.rmtree(...) …` built from assignment/call shapes. */
@@ -463,6 +483,83 @@ function matchCall(t: string): string | undefined {
 
 function truncate(s: string, maxLength: number): string {
   return s.length > maxLength ? s.slice(0, maxLength - 1) + '…' : s;
+}
+
+// ---------------------------------------------------------------------------
+// header-expression condensation (the node `detail`)
+// ---------------------------------------------------------------------------
+// `if (user.role === 'admin' && flags.isEnabled(ctx, 'x')) {`
+//   → `user.role === '…' && …`
+// Purely mechanical: string literals and depth-2+ bracket groups collapse to
+// `…`, then a hard token/char budget cuts at a token boundary.
+
+const STRING_LITERAL_RE = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g;
+// trailing block openers carry no information: `{`, `:`, `;`, `then`/`do`/`begin`
+const TRAILING_OPENER_RE = /\s*(?:\{|;|:|\bthen|\bdo|\bbegin)\s*$/;
+const BRACKET_CLOSER: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+
+function condenseHeader(
+  first: string,
+  kw: string,
+  opts: SegmentationOptions,
+): string | undefined {
+  let rest = first.slice(kw.length).replace(STRING_LITERAL_RE, "'…'").trim();
+  for (let prev = ''; prev !== rest; ) {
+    prev = rest;
+    rest = rest.replace(TRAILING_OPENER_RE, '');
+  }
+  // a condition that is exactly one paren group loses its wrapper
+  while (rest.startsWith('(') && matchingBracket(rest, 0) === rest.length - 1) {
+    rest = rest.slice(1, -1).trim();
+  }
+  rest = collapseNested(rest).replace(/\s+/g, ' ').trim();
+  const tokens = rest.split(' ');
+  if (tokens.length > opts.maxSummaryTokens) {
+    rest = tokens.slice(0, opts.maxSummaryTokens).join(' ') + ' …';
+  }
+  rest = truncate(rest, opts.maxDetailLength);
+  return rest === '' || rest === '…' ? undefined : rest;
+}
+
+function matchingBracket(s: string, open: number): number {
+  const opener = s[open];
+  const closer = BRACKET_CLOSER[opener];
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === opener) {
+      depth++;
+    } else if (s[i] === closer) {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+/** Keeps depth-0/1 text; deeper bracket groups collapse to `(…)`. */
+function collapseNested(s: string): string {
+  let out = '';
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === '(' || ch === '[' || ch === '{') {
+      depth++;
+      if (depth === 2) {
+        out += ch + '…' + BRACKET_CLOSER[ch];
+      } else if (depth === 1) {
+        out += ch;
+      }
+    } else if (ch === ')' || ch === ']' || ch === '}') {
+      if (depth <= 1) {
+        out += ch;
+      }
+      depth = Math.max(0, depth - 1);
+    } else if (depth < 2) {
+      out += ch;
+    }
+  }
+  return out;
 }
 
 /**

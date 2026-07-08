@@ -1,5 +1,11 @@
 .vscode/**
 .vscode-test/**
+.claude/**
+package-lock.json
+media/*.gif
+media/*.jpg
+media/*.webp
+media/*.mp4
 out/**
 node_modules/**
 src/**
