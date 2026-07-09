@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { extractBody } from '../core/segmentation';
 import { DocSegmentNode, SegmentCache } from './segmentCache';
-import { FunctionInfo, findEnclosingFunction } from './symbols';
+import { FunctionInfo, findFunctionAtCursor } from './symbols';
 
 /**
  * Skeleton fold (design.md §3.1).
@@ -77,7 +77,7 @@ async function withEnclosingFunction(
   if (!editor) {
     return;
   }
-  const fn = await findEnclosingFunction(editor.document, editor.selection.active);
+  const fn = await findFunctionAtCursor(editor.document, editor.selection.active);
   if (!fn) {
     void vscode.window.showInformationMessage('SightRead: cursor is not inside a function.');
     return;

@@ -1,11 +1,19 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import type { Compositor, SpotlightRender } from '../../vs/compositor';
+import type { EntriesViewFeature } from '../../vs/entriesView';
 import type { MarkerRepository } from '../../vs/highlighter';
 import type { MarkersViewFeature } from '../../vs/markersView';
+import type { SegmentsViewFeature } from '../../vs/segmentsView';
 
 interface TestApi {
-  _test: { repo: MarkerRepository; compositor: Compositor; markersView: MarkersViewFeature };
+  _test: {
+    repo: MarkerRepository;
+    compositor: Compositor;
+    markersView: MarkersViewFeature;
+    entriesView: EntriesViewFeature;
+    segmentsView: SegmentsViewFeature;
+  };
 }
 
 const EXTENSION_ID = 'WaylongLeon.sightread';
@@ -40,6 +48,8 @@ suite('SightRead integration', () => {
       'sightread.spotlightOff',
       'sightread.toggleVariableTint',
       'sightread.goToSegment',
+      'sightread.goToEntry',
+      'sightread.refreshEntries',
     ]) {
       assert.ok(commands.includes(id), `missing command ${id}`);
     }
@@ -174,6 +184,73 @@ suite('SightRead integration', () => {
       await waitFor(() => lineVisible(1) && lineVisible(4)),
       'unfoldSkeleton should reveal the folded ancestor chain',
     );
+  });
+
+  test('fold/unfold skeleton on a nested function folds only the nested one', async function () {
+    this.timeout(30000);
+    await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: [
+        'function outer() {', //      0
+        '  const a = 1;', //          1
+        '',
+        '  function inner(x) {', //   3
+        '    if (x) {', //            4
+        '      use(x);', //           5
+        '      more(x);', //          6
+        '    }', //                   7
+        '    return x;', //           8
+        '  }', //                     9
+        '',
+        '  return inner(a);', //      11
+        '}', //                       12
+        '',
+      ].join('\n'),
+      language: 'javascript',
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    // cursor ON the nested function's header line — "current function" is inner,
+    // not outer (the spotlight-only header yield must not leak into commands)
+    const headerCol = doc.lineAt(3).text.indexOf('inner') + 1;
+    editor.selection = new vscode.Selection(3, headerCol, 3, headerCol);
+
+    const lineVisible = (line: number): boolean =>
+      editor.visibleRanges.some((r) => r.start.line <= line && line <= r.end.line);
+    const waitFor = async (cond: () => boolean): Promise<boolean> => {
+      for (let i = 0; i < 100; i++) {
+        if (cond()) {
+          return true;
+        }
+        await sleep(100);
+      }
+      return cond();
+    };
+
+    // fold: retry until the language service is warm and the if-body folds
+    const folded = await waitFor(() => {
+      void vscode.commands.executeCommand('sightread.foldSkeleton');
+      return !lineVisible(5);
+    });
+    assert.ok(folded, "inner's if-body should fold");
+    assert.ok(lineVisible(3), 'inner header must stay visible');
+    assert.ok(lineVisible(4), "inner's if header must stay visible — inner itself must not collapse");
+    assert.ok(lineVisible(8), "inner's return must stay visible");
+    assert.ok(lineVisible(1) && lineVisible(11), "outer's own statements must stay visible");
+
+    // unfold from the header line restores inner's body
+    await vscode.commands.executeCommand('sightread.unfoldSkeleton');
+    assert.ok(await waitFor(() => lineVisible(5)), 'unfold should reveal the if-body');
+
+    // cursor inside the nested body behaves the same
+    editor.selection = new vscode.Selection(8, 4, 8, 4);
+    const foldedFromBody = await waitFor(() => {
+      void vscode.commands.executeCommand('sightread.foldSkeleton');
+      return !lineVisible(5);
+    });
+    assert.ok(foldedFromBody, 'if-body should fold from inside the nested body');
+    assert.ok(lineVisible(4) && lineVisible(11), 'only the if-body folds');
+    await vscode.commands.executeCommand('sightread.unfoldSkeleton');
+    assert.ok(await waitFor(() => lineVisible(5)), 'unfold should reveal the if-body again');
   });
 
   test('foldSkeleton outside a function does not crash', async () => {
@@ -399,6 +476,169 @@ suite('SightRead integration', () => {
       );
       assert.ok(covers(spot.lit, 7), 'the cursor segment itself should be lit');
     });
+  });
+
+  test('segments view follows the cursor and dims unrelated segments under spotlight', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: [
+        'function demo(a) {', //     0
+        '  if (a) {', //             1
+        '    use(a);', //            2
+        '    more(a);', //           3
+        '  }', //                    4
+        '',
+        '  for (const x of a) {', // 6
+        '    use(x);', //            7
+        '    more(x);', //           8
+        '  }', //                    9
+        '',
+        '  return a;', //            11
+        '}', //                      12
+        '',
+      ].join('\n'),
+      language: 'javascript',
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    const view = api._test.segmentsView;
+
+    // reveal only runs while the view is visible
+    await vscode.commands.executeCommand('sightread.segmentsView.focus');
+
+    await vscode.commands.executeCommand('sightread.spotlightOff');
+    await vscode.commands.executeCommand('sightread.spotlightCycle'); // Seg+Var
+    await vscode.commands.executeCommand('sightread.spotlightCycle'); // Seg
+
+    // cursor inside the if-body — poll until the pipeline selects its segment
+    // (the JS language service needs to warm up; alternate lines to refire events)
+    let selected: { node: { startLine: number; endLine: number } } | undefined;
+    for (let i = 0; i < 100; i++) {
+      const line = 2 + (i % 2);
+      editor.selection = new vscode.Selection(line, 5, line, 5);
+      await sleep(200);
+      selected = view.treeSelection[0];
+      if (selected && selected.node.startLine <= 2 && 2 <= selected.node.endLine) {
+        break;
+      }
+    }
+    assert.ok(selected, 'segments view never selected a segment');
+    assert.ok(
+      selected.node.startLine <= 2 && 2 <= selected.node.endLine,
+      `selection should contain the cursor line, got ${selected.node.startLine}-${selected.node.endLine}`,
+    );
+
+    // the selected (cursor) segment label carries the anchor highlight
+    const selectedItem = view.getTreeItem(view.treeSelection[0]);
+    const label = selectedItem.label as vscode.TreeItemLabel;
+    assert.ok(
+      typeof label === 'object' && (label.highlights?.length ?? 0) > 0,
+      'cursor segment label should be highlighted while the spotlight is on',
+    );
+
+    // the unrelated loop segment dims, the cursor's own top-level segment stays lit
+    const roots = view.getChildren();
+    const at = (line: number) =>
+      roots.find((el) => el.node.startLine <= line && line <= el.node.endLine);
+    const ifSeg = at(2);
+    const loopSeg = at(7);
+    assert.ok(ifSeg && loopSeg, 'expected top-level if and loop segments');
+    const ifUri = view.getTreeItem(ifSeg).resourceUri;
+    const loopUri = view.getTreeItem(loopSeg).resourceUri;
+    assert.ok(ifUri && loopUri, 'segment items should carry decoration URIs');
+    assert.strictEqual(
+      view.provideFileDecoration(ifUri),
+      undefined,
+      'the cursor segment must keep its normal color',
+    );
+    assert.ok(
+      view.provideFileDecoration(loopUri),
+      'the unrelated loop segment should be dimmed',
+    );
+
+    // spotlight off → no dimming, no anchor highlight
+    await vscode.commands.executeCommand('sightread.spotlightOff');
+    let undimmed = false;
+    for (let i = 0; i < 100; i++) {
+      editor.selection = new vscode.Selection(2 + (i % 2), 5, 2 + (i % 2), 5);
+      await sleep(200);
+      if (view.provideFileDecoration(loopUri) === undefined) {
+        undimmed = true;
+        break;
+      }
+    }
+    assert.ok(undimmed, 'spotlight off should clear the dimming');
+    const deepestAt = (line: number) => {
+      let pool = view.getChildren();
+      let found;
+      for (;;) {
+        const el = pool.find((e) => e.node.startLine <= line && line <= e.node.endLine);
+        if (!el) {
+          break;
+        }
+        found = el;
+        pool = view.getChildren(el);
+      }
+      return found;
+    };
+    const cursorEl = deepestAt(2);
+    assert.ok(cursorEl, 'cursor segment should still exist');
+    assert.strictEqual(
+      typeof view.getTreeItem(cursorEl).label,
+      'string',
+      'no anchor highlight while the spotlight is off',
+    );
+  });
+
+  test('entry points: exported → entry, internal-only → hidden, orphan → suspected', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: [
+        "import { readFileSync } from 'fs';", // imported name → never an entry
+        '',
+        'export function publicApi() {', // export keyword → entry even with no refs
+        '  return helper() + 1;',
+        '}',
+        '',
+        'function helper() {', //           referenced only above → hidden
+        '  return 2;',
+        '}',
+        '',
+        'function orphan() {', //           no refs anywhere → suspected
+        '  return 3;',
+        '}',
+        '',
+      ].join('\n'),
+      language: 'javascript',
+    });
+    await vscode.window.showTextDocument(doc);
+    const view = api._test.entriesView;
+
+    // the JS language service needs to warm up before references resolve — poll
+    let names: string[] = [];
+    for (let i = 0; i < 100; i++) {
+      const scan = view.ensureScan(doc, true);
+      await scan.done;
+      names = (await view.getChildren()).map((s) => s.name);
+      if (names.join(',') === 'publicApi,orphan') {
+        break;
+      }
+      await sleep(200);
+    }
+    assert.deepStrictEqual(
+      names,
+      ['publicApi', 'orphan'],
+      'entries sorted first, internal-only symbols hidden',
+    );
+
+    const visible = await view.getChildren();
+    assert.strictEqual(view.getTreeItem(visible[0]).description, 'exported');
+    assert.strictEqual(view.getTreeItem(visible[1]).description, 'no refs found');
+    assert.strictEqual(
+      view.getTreeItem(visible[0]).command?.command,
+      'sightread.revealLocation',
+    );
   });
 
   test('spotlight cycles through levels without error', async () => {

@@ -5,6 +5,7 @@ import {
   handleDocumentChange,
   registerHighlighterCommands,
 } from './vs/highlighter';
+import { EntriesViewFeature, registerEntryCommands } from './vs/entriesView';
 import { MarkersViewFeature } from './vs/markersView';
 import { SegmentCache } from './vs/segmentCache';
 import { SegmentsViewFeature, registerGoToSegment } from './vs/segmentsView';
@@ -23,7 +24,8 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const spotlight = new SpotlightController();
   const markersView = new MarkersViewFeature(repo, compositor);
   const segmentsView = new SegmentsViewFeature();
-  context.subscriptions.push(compositor, markersView, segmentsView);
+  const entriesView = new EntriesViewFeature();
+  context.subscriptions.push(compositor, markersView, segmentsView, entriesView);
   const spotlightStatus = vscode.window.createStatusBarItem(
     'sightread.spotlight',
     vscode.StatusBarAlignment.Right,
@@ -66,7 +68,6 @@ export function activate(context: vscode.ExtensionContext): unknown {
       return;
     }
     const segments = fn ? segmentCache.get(doc, fn.range) : [];
-    segmentsView.update(doc, fn, segments);
     // occurrences outside fn light their segment of the outermost function as islands
     const outerTree =
       fn && outermost && !outermost.range.isEqual(fn.range)
@@ -79,6 +80,8 @@ export function activate(context: vscode.ExtensionContext): unknown {
       tint.map((t) => t.range.start.line),
       outerTree,
     );
+    segmentsView.update(doc, fn, segments, pos.line, spot);
+    void segmentsView.revealCursor();
     compositor.setTransient(doc.uri, { tint, spotlight: spot });
     compositor.clearTransientExcept(doc.uri);
     compositor.renderVisible();
@@ -102,6 +105,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     afterUnfold: () => segmentsView.expandAll(),
   });
   registerGoToSegment(context, segmentCache);
+  registerEntryCommands(context, entriesView);
   context.subscriptions.push(
     vscode.commands.registerCommand('sightread.spotlightCycle', () => {
       spotlight.cycle();
@@ -170,7 +174,9 @@ export function activate(context: vscode.ExtensionContext): unknown {
   scheduleRefresh();
 
   // exposed for integration tests only
-  return { _test: { repo, segmentCache, compositor, spotlight, markersView } };
+  return {
+    _test: { repo, segmentCache, compositor, spotlight, markersView, entriesView, segmentsView },
+  };
 }
 
 export function deactivate(): void {}

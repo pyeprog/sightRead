@@ -31,23 +31,36 @@ function innermost<T extends EnclosingCandidate>(pool: T[]): T | undefined {
  * language servers). `containing` must hold only symbols whose range contains
  * the cursor.
  *
- * A nested definition's header line belongs to both scopes. Reading it as a
- * statement of the OUTER function keeps the definition and its call sites in
- * one spotlight — so a candidate whose header line is the cursor line yields
- * to its enclosing candidates. With nothing to yield to (a top-level header)
- * the candidate keeps itself.
+ * This is the target of explicit "current function" commands (fold/unfold
+ * skeleton, remove markers in function, go to segment): with the cursor
+ * anywhere on a nested function — its header line included — the command
+ * targets the nested function itself, never the one around it.
+ */
+export function chooseInnermostFunction<T extends EnclosingCandidate>(
+  containing: T[],
+): T | undefined {
+  return innermost(containing.filter((c) => c.fnKind)) ?? innermost(containing);
+}
+
+/**
+ * Like `chooseInnermostFunction`, but reads a nested definition's header line
+ * as part of the OUTER scope. This is the spotlight anchor: the header line
+ * belongs to both scopes, and scoping it to the outer function keeps a local
+ * definition and its call sites in one spotlight — so a candidate whose
+ * header line is the cursor line yields to its enclosing candidates. With
+ * nothing to yield to (a top-level header) the candidate keeps itself.
  */
 export function chooseEnclosingFunction<T extends EnclosingCandidate>(
   containing: T[],
   cursorLine: number,
 ): T | undefined {
-  const pick = (pool: T[]): T | undefined =>
-    innermost(pool.filter((c) => c.fnKind)) ?? innermost(pool);
-  const first = pick(containing);
+  const first = chooseInnermostFunction(containing);
   if (!first || first.startLine !== cursorLine) {
     return first;
   }
-  return pick(containing.filter((c) => c.startLine !== cursorLine)) ?? first;
+  return (
+    chooseInnermostFunction(containing.filter((c) => c.startLine !== cursorLine)) ?? first
+  );
 }
 
 function widest<T extends EnclosingCandidate>(pool: T[]): T | undefined {

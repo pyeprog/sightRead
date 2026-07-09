@@ -2,7 +2,7 @@
   "name": "sightread",
   "displayName": "SightRead",
   "description": "A reading lens for code: highlight, dim, fold and outline function segments to help you understand code in place.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "WaylongLeon",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -121,6 +121,15 @@
       {
         "command": "sightread.goToSegment",
         "title": "SightRead: Go to Segment…"
+      },
+      {
+        "command": "sightread.goToEntry",
+        "title": "SightRead: Go to Entry Point…"
+      },
+      {
+        "command": "sightread.refreshEntries",
+        "title": "SightRead: Refresh Entry Points",
+        "icon": "$(refresh)"
       }
     ],
     "viewsContainers": {
@@ -134,6 +143,10 @@
     },
     "views": {
       "sightread": [
+        {
+          "id": "sightread.entriesView",
+          "name": "Entry Points"
+        },
         {
           "id": "sightread.segmentsView",
           "name": "Segments"
@@ -162,6 +175,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "sightread.refreshEntries",
+          "when": "view == sightread.entriesView",
+          "group": "navigation@1"
+        },
         {
           "command": "sightread.spotlightCycle",
           "when": "view == sightread.segmentsView",
@@ -260,6 +278,10 @@
         {
           "command": "sightread.goToSegment",
           "group": "3_view@4"
+        },
+        {
+          "command": "sightread.goToEntry",
+          "group": "3_view@5"
         }
       ]
     },
@@ -308,6 +330,26 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Opacity of sibling segments of the cursor's segment (spotlight level 2+)."
+        },
+        "sightread.entries.languageHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use language syntax (export/pub keywords, Go capitalization, leading-underscore naming) to classify symbols that have no references anywhere: declared-public ones become entries, declared-private ones are dropped."
+        },
+        "sightread.entries.showSuspected": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show suspected entries — symbols with no references found anywhere. These may be framework-invoked entries (activation hooks, route handlers) or dead code."
+        },
+        "sightread.entries.gutterIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mark entry points with a gutter icon in the editor."
+        },
+        "sightread.entries.iconColor": {
+          "type": "string",
+          "default": "#8C8C8C",
+          "description": "Color of the entry-point gutter chevrons (any CSS color, e.g. #3794FF). Suspected entries use the same color at reduced opacity."
         },
         "sightread.marker.notePosition": {
           "type": "string",

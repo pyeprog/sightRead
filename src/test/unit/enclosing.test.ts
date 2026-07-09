@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
   EnclosingCandidate,
   chooseEnclosingFunction,
+  chooseInnermostFunction,
   chooseOutermostFunction,
 } from '../../core/enclosing';
 
@@ -67,6 +68,37 @@ suite('enclosing: chooseEnclosingFunction', () => {
     const mid = c('mid', 2, 15);
     const inner = c('inner', 5, 8);
     assert.strictEqual(chooseEnclosingFunction([outer, mid, inner], 5)?.name, 'mid');
+  });
+});
+
+suite('enclosing: chooseInnermostFunction', () => {
+  test('empty candidates → undefined', () => {
+    assert.strictEqual(chooseInnermostFunction([]), undefined);
+  });
+
+  test('picks the innermost function-kind candidate', () => {
+    const outer = c('outer', 0, 20);
+    const inner = c('inner', 3, 8);
+    assert.strictEqual(chooseInnermostFunction([outer, inner])?.name, 'inner');
+  });
+
+  test('never yields on a header line: commands on `function inner(…)` target inner', () => {
+    // the candidate list a cursor on inner's header line produces
+    const outer = c('outer', 0, 9);
+    const inner = c('inner', 3, 5);
+    assert.strictEqual(chooseInnermostFunction([outer, inner])?.name, 'inner');
+  });
+
+  test('a function-kind candidate beats a smaller non-function one', () => {
+    const fn = c('fn', 0, 9);
+    const variable = c('v', 2, 4, false);
+    assert.strictEqual(chooseInnermostFunction([fn, variable])?.name, 'fn');
+  });
+
+  test('falls back to the innermost any-kind candidate without function kinds', () => {
+    const mod = c('mod', 0, 20, false);
+    const arrow = c('arrow', 3, 8, false);
+    assert.strictEqual(chooseInnermostFunction([mod, arrow])?.name, 'arrow');
   });
 });
 

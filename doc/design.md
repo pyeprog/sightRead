@@ -72,6 +72,7 @@
 - 垃圾代码退化为"整个函数一段"，无害。
 - 纯函数实现（`core/segmentation.ts`），按文档版本缓存。
 - 消费方：聚光灯二/三档、`Go to Segment` QuickPick、侧边栏 **Segments 视图**（随光标显示当前函数的段落树，按 kind 显示彩色图标：branch=黄/loop=绿/try=红/definition=紫/assignment=橙/call=蓝；不显示行号）。
+- **Segments 视图随光标联动**（2026-07-09）：光标移动时 `TreeView.reveal` 选中光标所在最深段（`focus: false` 不抢焦点；树处于骨架折叠的收起态时跳过，避免 reveal 展开祖先并经 syncCodeFold 反向展开刚折叠的代码）。聚光灯开启时视图同步亮暗：lit 集合之外的段以 `FileDecorationProvider`（自定义 scheme `sightread-seg` 的 resourceUri）染 `list.deemphasizedForeground` 并置灰图标，光标段的 label 用 `TreeItemLabel.highlights` 强调——树条目无法比默认前景更亮，"点亮"只能靠压暗其余部分表达，与编辑器同构。
 - ~~Outline 注入~~（**已实证失败，2026-07-07**）：provider 内调 `executeDocumentSymbolProvider` 会与 VS Code OutlineModel 的 in-flight 请求合并机制形成循环等待，Outline 永远 loading。"既消费又提供符号"结构性走不通，按预留退路改为侧边栏 TreeView。
 
 ### 3.5 聚光灯（spotlight）
@@ -95,8 +96,20 @@
 
 - 切段失灵（无段落/光标在段落间隙）→ 自动退化为一档行为。
 - 光标驱动 + 防抖（~120ms）；焦点抖动的保持策略留待原型体感调参。
-- 入口在 **Segments 视图标题栏的 👁 按钮**（点击循环档位；自定义 view container 本身没有标题按钮贡献点，视图标题栏是最近的位置）；当前档位以**数字角标**显示在活动栏的 SightRead 图标上（0 档无角标）。状态栏项已移除（2026-07-07）。
-- `sightread.spotlight.defaultLevel`：启动时应用的默认档位（0–3，默认 0）。
+- 入口在 **Segments 视图标题栏的 👁 按钮**（点击循环档位；自定义 view container 本身没有标题按钮贡献点，视图标题栏是最近的位置）与**状态栏的 👁 项**（显示当前档位，点击循环）；当前档位以**数字角标**显示在活动栏的 SightRead 图标上（0 档无角标）。
+- `sightread.spotlight.defaultMode`：启动时应用的默认档位（off / seg+var / seg / fn，默认 off）。
+
+### 3.6 入口点（entry points，2026-07-09）
+
+- **动机**（原 doc/inbox 想法）：列举出当前文件所有的"入口"——所有会 export 出去、被外界调用的函数/类/变量。先列举，之后直接顺着引用往下看，再做筛选——给阅读一个文件的路径指出一条明路：从入口开始读，而不是从第一行开始读。
+- 侧边栏 **Entry Points 视图**：每个顶层符号按**引用位置**分类（`executeReferenceProvider`）：
+  - 有文件外引用 → **入口**；
+  - 仅文件内引用 → 隐藏（内部实现细节）；
+  - 找不到任何引用 → **疑似入口**，弱化显示（`activate` 这类框架钩子、路由 handler，或死代码），`sightread.entries.showSuspected` 可关。
+- **语言语法提示**（`sightread.entries.languageHints`，默认开）细化"无引用"情形：`export`/`pub` 关键字、`export { … }` 子句、Python `__all__`、Go 大小写、前导下划线命名——声明公开的升为入口，声明私有的丢弃。
+- **导入名永不是入口**（其引用属于原符号），除非文件刻意再发布（`export { x }`、`__all__`）——barrel 文件与 `__init__.py` 因此保有入口。
+- 入口类懒展开、逐方法分类；`Go to Entry Point…` QuickPick；编辑器 gutter 雪佛龙（»）标注入口行（`sightread.entries.gutterIcons` 默认开，颜色 `sightread.entries.iconColor`，疑似入口降透明度）。
+- 扫描只在视图可见或 gutter 图标开启时运行，按文档版本缓存，引用查询完成即流式补全结果。
 
 ## 四、架构
 
@@ -106,15 +119,20 @@ src/
     segmentation.ts   切段算法 + 函数体提取
     markers.ts        荧光笔数据操作（编辑平移/相交删除/替换插入）
     focus.ts          焦点集合计算、行区间代数（merge/subtract/contain）
+    enclosing.ts      "当前函数"选择（显式命令取最内层 vs 聚光灯的头行让位）
+    entries.ts        入口点分类（引用位置 + 语言语法提示）
   vs/              平台层
     compositor.ts     唯一渲染出口：装饰类型注册 + 图层/模式合成
-    symbols.ts        最内层函数查找（executeDocumentSymbolProvider）
+    symbols.ts        函数查找（executeDocumentSymbolProvider，两种语义见 core/enclosing）
     segmentCache.ts   按文档版本缓存的切段结果
     highlighter.ts    荧光笔命令 + workspaceState 持久化 + 编辑跟踪
     variableTint.ts   occurrence 获取与降级
-    spotlight.ts      档位状态 + 焦点计算 + 状态栏
+    spotlight.ts      聚光灯档位状态 + 焦点计算入口
     skeletonFold.ts   折叠命令对
-    segmentOutline.ts Go to Segment + 实验性 DocumentSymbolProvider
+    segmentsView.ts   Segments 树视图（光标联动 + 亮暗镜像）+ Go to Segment
+    markersView.ts    Markers 树视图（按文件分组，快捷涂色/删除）
+    entriesView.ts    Entry Points 树视图 + gutter 图标 + Go to Entry Point
+    palette.ts        荧光笔调色板与 gutter/树图标生成
   extension.ts     事件接线：统一的光标管线（防抖 + 过期令牌），文档变更分发
 ```
 

@@ -37,8 +37,9 @@ Five orthogonal features, each providing a different kind of visual assistance (
   2. **Seg** — only the current block; other blocks are dimmed
   3. **Seg+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
   4. **Off** — spotlight off, the default mode.
-- **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line).
-- **Sidebar** — the SightRead activity-bar container holds two views: **Segments** (the current function's segment tree) and **Markers** (all highlighter marks in the workspace).
+- **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
+- **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
+- **Sidebar** — the SightRead activity-bar container holds three views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree) and **Markers** (all highlighter marks in the workspace).
 
 ## Settings
 
@@ -49,6 +50,10 @@ Five orthogonal features, each providing a different kind of visual assistance (
 | `sightread.spotlight.functionDimOpacity` | `0.15` | dim level outside the function |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | dim level for non-related code in the function |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | dim level for siblings of the cursor's segment |
+| `sightread.entries.languageHints` | `true` | classify no-reference symbols by language syntax (`export`/`pub`, Go capitalization, `_` prefix) |
+| `sightread.entries.showSuspected` | `true` | show "suspected" entries (symbols with no references found) |
+| `sightread.entries.gutterIcons` | `true` | mark entry lines with gutter chevrons (») |
+| `sightread.entries.iconColor` | `#8C8C8C` | chevron color; suspected entries use it at reduced opacity |
 | `sightread.marker.notePosition` | `lineEnd` | marker note at line start or line end |
 
 ## Development

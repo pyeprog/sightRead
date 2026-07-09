@@ -10,7 +10,7 @@ import {
   removeInLineRange,
 } from '../core/markers';
 import { Compositor } from './compositor';
-import { findEnclosingFunction } from './symbols';
+import { findFunctionAtCursor } from './symbols';
 
 const STORAGE_KEY = 'sightread.markers';
 
@@ -169,7 +169,7 @@ export function registerHighlighterCommands(
     vscode.commands.registerCommand(
       'sightread.removeMarkersInFunction',
       withEditor(async (editor) => {
-        const fn = await findEnclosingFunction(editor.document, editor.selection.active);
+        const fn = await findFunctionAtCursor(editor.document, editor.selection.active);
         if (!fn) {
           void vscode.window.showInformationMessage('SightRead: cursor is not inside a function.');
           return;
