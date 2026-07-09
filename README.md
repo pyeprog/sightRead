@@ -1,14 +1,31 @@
-# SightRead
+<p align="center">
+  <img src="./media/icon.png" width="120" alt="SightRead icon">
+</p>
 
-**English** | [简体中文](README-CN.md)
+<h1 align="center">SightRead</h1>
 
-A code-reading enhancer for the vibe-coding era, focused on the micro-scale reading of code. Highlighting, marking, one-key fold/unfold, visual reinforcement of code segments — so you can understand code **in place**.
+<p align="center">
+  A code-reading enhancer for the vibe-coding era, focused on the micro-scale reading of code.<br>
+  Highlighting, marking, one-key fold/unfold, visual reinforcement of code segments — so you can understand code <b>in place</b>.
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread"><img src="https://vsmarketplacebadges.dev/version/WaylongLeon.sightread.svg?label=VS%20Marketplace&amp;color=007ACC" alt="VS Marketplace"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread"><img src="https://vsmarketplacebadges.dev/installs-short/WaylongLeon.sightread.svg" alt="Installs"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread&amp;ssr=false#review-details"><img src="https://vsmarketplacebadges.dev/rating-star/WaylongLeon.sightread.svg" alt="Rating"></a>
+  <a href="https://open-vsx.org/extension/WaylongLeon/sightread"><img src="https://img.shields.io/open-vsx/v/WaylongLeon/sightread?label=Open%20VSX" alt="Open VSX"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/pyeprog/sightRead" alt="License"></a>
+</p>
+
+<p align="center"><b>English</b> | <a href="README-CN.md">简体中文</a></p>
 
 > Sibling project of [Navigation History](https://github.com/pyeprog/navigation-history).
 
-## Why
+## 💭 Why
 
-![babel](./media/babel-towel.jpg)
+<p align="center">
+  <img src="./media/babel-towel.jpg" alt="babel">
+</p>
 
 > Those who don't read the code cannot steer the product, cannot control the quality of the project, and cannot learn anything.
 
@@ -21,27 +38,55 @@ This extension offers some visual assistance to those who still want to read cod
 Humans are no longer the main producers of code — machines are. Reading code, understanding it and making decisions is today's bottleneck. Facing a wall of code, an LLM can lay out the big structure and framework for you, but it cannot do the close reading for you (reading the detailed code costs the same as reading the LLM's summary of it).
 SightRead goes the opposite way: no LLM required, it strengthens the *human* ability to read itself, draping a layer of visual aids over your code (toggleable at any time) — so that, like a musician sight-reading a score, the logical picture surfaces the moment you see the code.
 
-![solennelle](./media/solennelle.webp)
+<p align="center">
+  <img src="./media/solennelle.webp" alt="solennelle">
+</p>
 
-## Features
+## ✨ Features
 
-![instruction](./media/demo.webp)
+<p align="center">
+  <img src="./media/demo.webp" alt="demo">
+</p>
 
 Five orthogonal features, each providing a different kind of visual assistance (see design.md §2):
 
-- **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
-- **Highlighter (markers)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first, optionally with a short note saying what the block does.
-- **Variable tint** — within the context of the enclosing function, outlines the symbol under the cursor, so you can see at a glance where this variable was created and where it is used.
-- **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar to cycle Off → Seg+Var → Seg → Fn.
+- 🦴 **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
+- 🖍️ **Highlighter (markers)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first, optionally with a short note saying what the block does.
+- 🎯 **Variable tint** — within the context of the enclosing function, outlines the symbol under the cursor, so you can see at a glance where this variable was created and where it is used.
+- 🔦 **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar to cycle Off → Seg+Var → Seg → Fn.
   1. **Fn** — only the current function; other functions are dimmed
   2. **Seg** — only the current block; other blocks are dimmed
   3. **Seg+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
   4. **Off** — spotlight off, the default mode.
-- **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
-- **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
-- **Sidebar** — the SightRead activity-bar container holds three views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree) and **Markers** (all highlighter marks in the workspace).
+- 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
+- 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
+- 🗂️ **Sidebar** — the SightRead activity-bar container holds three views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree) and **Markers** (all highlighter marks in the workspace).
 
-## Settings
+## ⌨️ Commands
+
+All commands live under the `SightRead:` prefix in the Command Palette. The everyday ones are also in the editor right-click menu (**SightRead** submenu) and on the sidebar view title bars.
+
+| Command | What it does |
+|---|---|
+| `SightRead: Fold Skeleton (Current Function)` | fold every block inside the current function to see its large structure |
+| `SightRead: Unfold Skeleton (Current Function)` | unfold them again |
+| `SightRead: Mark Selection…` | highlighter-mark the selection, picking a color and an optional note |
+| `SightRead: Mark Selection Yellow (key point)` | one-tap yellow marker |
+| `SightRead: Mark Selection Red (doubt)` | one-tap red marker |
+| `SightRead: Mark Selection Green (verified)` | one-tap green marker |
+| `SightRead: Add/Edit Marker Note` | attach or edit the short note on the marker under the cursor |
+| `SightRead: Remove Markers in Selection` | clear markers touching the selection |
+| `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
+| `SightRead: Remove Markers in File` | clear markers in the current file |
+| `SightRead: Remove All Markers (Workspace)` | clear every marker in the workspace |
+| `SightRead: Cycle Spotlight Level` | Off → Seg+Var → Seg → Fn, same as clicking the 👁 status-bar item |
+| `SightRead: Spotlight Off` | jump straight back to Off |
+| `SightRead: Toggle Variable Tint` | turn occurrence outlining on or off |
+| `SightRead: Go to Segment…` | QuickPick over the current function's segments |
+| `SightRead: Go to Entry Point…` | QuickPick over the file's entry points |
+| `SightRead: Refresh Entry Points` | re-scan the current file's entries |
+
+## ⚙️ Settings
 
 | Setting | Default | |
 |---|---|---|
@@ -56,7 +101,7 @@ Five orthogonal features, each providing a different kind of visual assistance (
 | `sightread.entries.iconColor` | `#8C8C8C` | chevron color; suspected entries use it at reduced opacity |
 | `sightread.marker.notePosition` | `lineEnd` | marker note at line start or line end |
 
-## Development
+## 🛠️ Development
 
 ```bash
 npm install
