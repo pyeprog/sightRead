@@ -5,6 +5,7 @@ import {
   detectDeclaredPublic,
   isExportClauseLine,
   isImportLine,
+  isMainGuardRef,
   parseExportedNames,
 } from '../core/entries';
 
@@ -77,10 +78,12 @@ export interface EntrySymbol {
   declaredPublic?: boolean;
   /** an imported name — see EntryEvidence.alias */
   alias?: boolean;
+  /** declaredPublic came from a `__main__` guard — described as "script entry" */
+  scriptEntry?: boolean;
   /** function-like children of a container symbol, classified on expand */
   members: EntrySymbol[];
   /** undefined while the reference query is pending */
-  evidence?: { externalRefs: number; internalRefs: number };
+  evidence?: { externalRefs: number; wrappedRefs: number; scriptRefs: number };
   /** in-flight lazy classification of `members` */
   membersScan?: Promise<void>;
 }
@@ -254,7 +257,7 @@ export class EntriesViewFeature
     // symbol, and skipping them skips a workspace-wide reference query)
     for (const s of mapped) {
       if (s.alias && s.declaredPublic === true) {
-        s.evidence = { externalRefs: 0, internalRefs: 0 };
+        s.evidence = { externalRefs: 0, wrappedRefs: 0, scriptRefs: 0 };
       }
     }
     scan.symbols = mapped.filter((s) => !s.alias || s.declaredPublic === true);
@@ -317,7 +320,8 @@ export class EntriesViewFeature
       // no provider / provider error — classify on zeros
     }
     let externalRefs = 0;
-    let internalRefs = 0;
+    let wrappedRefs = 0;
+    let scriptRefs = 0;
     for (const loc of locs) {
       if (loc.uri.toString() !== scan.uriString) {
         externalRefs++;
@@ -332,9 +336,23 @@ export class EntriesViewFeature
         sym.declaredPublic = true; // `export { foo }` / `__all__` publishes, not calls
         continue;
       }
-      internalRefs++;
+      if (
+        scan.symbols.some((other) => other !== sym && other.range.contains(loc.range.start))
+      ) {
+        wrappedRefs++; // a more abstract same-file symbol wraps this one
+        continue;
+      }
+      // module top-level code — the caller is the script itself, not a
+      // symbol the reader could start from instead (relies on the symbol
+      // provider reporting full body ranges, as the own-range check does)
+      if (isMainGuardRef(scan.languageId, (i) => doc.lineAt(i).text, loc.range.start.line)) {
+        sym.declaredPublic = true; // the `__main__` guard publishes the script entry
+        sym.scriptEntry = true;
+        continue;
+      }
+      scriptRefs++;
     }
-    sym.evidence = { externalRefs, internalRefs };
+    sym.evidence = { externalRefs, wrappedRefs, scriptRefs };
     await this.detectAlias(doc, scan, sym);
   }
 
@@ -429,13 +447,16 @@ export class EntriesViewFeature
       return '…';
     }
     if (verdict === 'suspected') {
-      return 'no refs found';
+      return el.evidence.scriptRefs > 0 ? 'called at top level' : 'no refs found';
     }
     if (el.alias) {
       return 're-exported';
     }
     const n = el.evidence.externalRefs;
-    return n > 0 ? `${n} external ref${n === 1 ? '' : 's'}` : 'exported';
+    if (n > 0) {
+      return `${n} external ref${n === 1 ? '' : 's'}`;
+    }
+    return el.scriptEntry ? 'script entry' : 'exported';
   }
 
   getChildren(el?: EntrySymbol): EntrySymbol[] | Promise<EntrySymbol[]> {

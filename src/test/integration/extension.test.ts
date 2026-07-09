@@ -590,7 +590,7 @@ suite('SightRead integration', () => {
     );
   });
 
-  test('entry points: exported → entry, internal-only → hidden, orphan → suspected', async function () {
+  test('entry points: exported → entry, wrapped → hidden, orphan/top-level-called → suspected', async function () {
     this.timeout(30000);
     const api = await getApi();
     const doc = await vscode.workspace.openTextDocument({
@@ -601,13 +601,19 @@ suite('SightRead integration', () => {
         '  return helper() + 1;',
         '}',
         '',
-        'function helper() {', //           referenced only above → hidden
+        'function helper() {', //           wrapped by publicApi above → hidden
         '  return 2;',
         '}',
         '',
         'function orphan() {', //           no refs anywhere → suspected
         '  return 3;',
         '}',
+        '',
+        'function bootstrap() {', //        called only from top-level code → suspected, not hidden
+        '  return 4;',
+        '}',
+        '',
+        'bootstrap();',
         '',
       ].join('\n'),
       language: 'javascript',
@@ -621,20 +627,21 @@ suite('SightRead integration', () => {
       const scan = view.ensureScan(doc, true);
       await scan.done;
       names = (await view.getChildren()).map((s) => s.name);
-      if (names.join(',') === 'publicApi,orphan') {
+      if (names.join(',') === 'publicApi,orphan,bootstrap') {
         break;
       }
       await sleep(200);
     }
     assert.deepStrictEqual(
       names,
-      ['publicApi', 'orphan'],
-      'entries sorted first, internal-only symbols hidden',
+      ['publicApi', 'orphan', 'bootstrap'],
+      'entries sorted first, wrapped symbols hidden, top-level-called symbols kept',
     );
 
     const visible = await view.getChildren();
     assert.strictEqual(view.getTreeItem(visible[0]).description, 'exported');
     assert.strictEqual(view.getTreeItem(visible[1]).description, 'no refs found');
+    assert.strictEqual(view.getTreeItem(visible[2]).description, 'called at top level');
     assert.strictEqual(
       view.getTreeItem(visible[0]).command?.command,
       'sightread.revealLocation',

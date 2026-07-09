@@ -104,8 +104,10 @@
 - **动机**（原 doc/inbox 想法）：列举出当前文件所有的"入口"——所有会 export 出去、被外界调用的函数/类/变量。先列举，之后直接顺着引用往下看，再做筛选——给阅读一个文件的路径指出一条明路：从入口开始读，而不是从第一行开始读。
 - 侧边栏 **Entry Points 视图**：每个顶层符号按**引用位置**分类（`executeReferenceProvider`）：
   - 有文件外引用 → **入口**；
-  - 仅文件内引用 → 隐藏（内部实现细节）；
+  - 有来自**其他符号 body 内**的同文件引用（wrapped）→ 隐藏——存在更抽象的包装者，读者应从包装者读起；
+  - 只有来自**模块顶层代码**的同文件引用（script ref）→ **中性证据**：调用者是脚本本身，不是读者可以改从其读起的符号，故既不降级也不升级，落到语法提示/疑似入口路径（描述显示 "called at top level"）；
   - 找不到任何引用 → **疑似入口**，弱化显示（`activate` 这类框架钩子、路由 handler，或死代码），`sightread.entries.showSuspected` 可关。
+- **发布行**不算调用：`export { … }` 子句、Python `__all__`、以及 Python `__main__` guard 块内的调用（`if __name__ == '__main__': main()` 是"向运行时发布入口"的语法，与 export 子句同族；按缩进向上找 guard，与 Go `main`/`init` 声明侧特例对称）——均记为声明公开证据，`main` 因此是正式入口（描述显示 "script entry"）。
 - **语言语法提示**（`sightread.entries.languageHints`，默认开）细化"无引用"情形：`export`/`pub` 关键字、`export { … }` 子句、Python `__all__`、Go 大小写、前导下划线命名——声明公开的升为入口，声明私有的丢弃。
 - **导入名永不是入口**（其引用属于原符号），除非文件刻意再发布（`export { x }`、`__all__`）——barrel 文件与 `__init__.py` 因此保有入口。
 - 入口类懒展开、逐方法分类；`Go to Entry Point…` QuickPick；编辑器 gutter 雪佛龙（»）标注入口行（`sightread.entries.gutterIcons` 默认开，颜色 `sightread.entries.iconColor`，疑似入口降透明度）。

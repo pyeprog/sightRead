@@ -6,6 +6,15 @@
  * entry no matter how it is declared. Language syntax (export keywords,
  * naming conventions) only breaks ties for symbols with no references at
  * all — it can promote them to entries or drop them, never override usage.
+ *
+ * Same-file references are not one signal but three, split by where they
+ * come from: a reference inside ANOTHER symbol's body means a more abstract
+ * wrapper exists and the reader should start there (demotes to hidden); a
+ * reference from module top-level code has no such wrapper — the caller is
+ * the script itself, which is not a symbol the reader could start from — so
+ * it is neutral; and a reference on a publishing line (`export { … }`,
+ * `__all__`, Python's `__main__` guard) is not a call at all but the file
+ * declaring the symbol public.
  */
 
 export type EntryVerdict = 'entry' | 'suspected' | 'hidden';
@@ -13,8 +22,19 @@ export type EntryVerdict = 'entry' | 'suspected' | 'hidden';
 export interface EntryEvidence {
   /** references from other files (declaration excluded) */
   externalRefs: number;
-  /** references from this file outside the symbol's own body (self-recursion and export clauses excluded) */
-  internalRefs: number;
+  /**
+   * same-file references from inside ANOTHER symbol's body (self-recursion
+   * and publishing lines excluded): the symbol is wrapped by a more
+   * abstract same-file symbol
+   */
+  wrappedRefs: number;
+  /**
+   * same-file references from module top-level code, outside every symbol
+   * body. Neutral for classification — the caller is the script itself,
+   * not a visible wrapper — but kept so the UI can say "called at top
+   * level" instead of pretending the symbol is unreferenced.
+   */
+  scriptRefs?: number;
   /**
    * language-syntax verdict: true = declared public (export/pub keyword, an
    * export clause, Go capitalization), false = declared private (underscore
@@ -30,14 +50,19 @@ export interface EntryEvidence {
 }
 
 /**
- * entry     — referenced from outside the file (internal refs are irrelevant:
+ * entry     — referenced from outside the file (wrapped refs are irrelevant:
  *             an entry may also be wrapped by a more abstract entry), or
- *             unreferenced but declared public.
- * hidden    — only referenced within the file, or unreferenced and declared
- *             private. Not shown.
- * suspected — no references found anywhere and the syntax is silent. Could be
- *             a framework-invoked entry (activation hooks, route handlers,
- *             string dispatch) or dead code; shown de-emphasized.
+ *             unwrapped but declared public.
+ * hidden    — wrapped by another same-file symbol, or unwrapped, unreferenced
+ *             and declared private. Not shown.
+ * suspected — nothing wraps it, nothing external references it, and the
+ *             syntax is silent. Could be a framework-invoked entry
+ *             (activation hooks, route handlers, string dispatch), the
+ *             target of a top-level script call, or dead code; shown
+ *             de-emphasized. scriptRefs land here deliberately: a top-level
+ *             call proves the script uses the symbol but offers the reader
+ *             no better symbol to start from, so it neither demotes nor
+ *             promotes.
  */
 export function classifyEntry(e: EntryEvidence): EntryVerdict {
   if (e.alias) {
@@ -48,7 +73,7 @@ export function classifyEntry(e: EntryEvidence): EntryVerdict {
   if (e.externalRefs > 0) {
     return 'entry';
   }
-  if (e.internalRefs > 0) {
+  if (e.wrappedRefs > 0) {
     return 'hidden';
   }
   if (e.declaredPublic === true) {
@@ -110,6 +135,51 @@ export function isExportClauseLine(languageId: string, lineText: string): boolea
   }
   if (languageId === 'python') {
     return /^\s*__all__\s*[=+]/.test(lineText);
+  }
+  return false;
+}
+
+const PYTHON_MAIN_GUARD = /^\s*if\s+__name__\s*==\s*['"]__main__['"]/;
+
+/**
+ * Whether a same-file reference on `line` sits inside the file's runtime
+ * dispatch block — Python's `if __name__ == '__main__':`. Like an export
+ * clause, such a reference publishes rather than calls: it is the language's
+ * way of declaring the script-mode entry, and the reference provider sees it
+ * only because the dispatch is spelled as a call. Counts as declared-public
+ * evidence, never as a same-file caller.
+ *
+ * Detection walks up from the reference through enclosing blocks (nearest
+ * shallower-indented line, repeatedly) until it reaches the guard or a
+ * column-0 statement that isn't it, so calls nested in `try:`/`if` inside
+ * the guard still match while an `else:` branch of the guard does not.
+ */
+export function isMainGuardRef(
+  languageId: string,
+  lineTextAt: (line: number) => string,
+  line: number,
+): boolean {
+  if (languageId !== 'python') {
+    return false;
+  }
+  const indentOf = (t: string): number => t.length - t.trimStart().length;
+  let text = lineTextAt(line);
+  if (PYTHON_MAIN_GUARD.test(text)) {
+    return true; // one-liner: if __name__ == '__main__': main()
+  }
+  let enclosing = indentOf(text);
+  for (let i = line - 1; i >= 0 && enclosing > 0; i--) {
+    text = lineTextAt(i);
+    if (text.trim() === '') {
+      continue;
+    }
+    const indent = indentOf(text);
+    if (indent < enclosing) {
+      if (PYTHON_MAIN_GUARD.test(text)) {
+        return true;
+      }
+      enclosing = indent;
+    }
   }
   return false;
 }

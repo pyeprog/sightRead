@@ -4,66 +4,94 @@ import {
   detectDeclaredPublic,
   isExportClauseLine,
   isImportLine,
+  isMainGuardRef,
   parseExportedNames,
 } from '../../core/entries';
 
 suite('entries: classifyEntry', () => {
   test('external refs only → entry', () => {
-    assert.strictEqual(classifyEntry({ externalRefs: 3, internalRefs: 0 }), 'entry');
+    assert.strictEqual(classifyEntry({ externalRefs: 3, wrappedRefs: 0 }), 'entry');
   });
 
-  test('external AND internal refs → still an entry (wrapped by a more abstract entry)', () => {
-    assert.strictEqual(classifyEntry({ externalRefs: 1, internalRefs: 5 }), 'entry');
+  test('external AND wrapped refs → still an entry (wrapped by a more abstract entry)', () => {
+    assert.strictEqual(classifyEntry({ externalRefs: 1, wrappedRefs: 5 }), 'entry');
   });
 
-  test('internal refs only → hidden', () => {
-    assert.strictEqual(classifyEntry({ externalRefs: 0, internalRefs: 2 }), 'hidden');
+  test('wrapped refs only → hidden', () => {
+    assert.strictEqual(classifyEntry({ externalRefs: 0, wrappedRefs: 2 }), 'hidden');
   });
 
   test('no refs at all, syntax silent → suspected', () => {
-    assert.strictEqual(classifyEntry({ externalRefs: 0, internalRefs: 0 }), 'suspected');
+    assert.strictEqual(classifyEntry({ externalRefs: 0, wrappedRefs: 0 }), 'suspected');
+  });
+
+  test('script refs are neutral: top-level call alone → suspected, not hidden', () => {
+    // define-then-invoke at module top level: the "wrapper" is the script
+    // itself, which is not a symbol the reader could start from instead
+    assert.strictEqual(
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, scriptRefs: 2 }),
+      'suspected',
+    );
+  });
+
+  test('script refs are neutral: syntax still breaks the tie in both directions', () => {
+    assert.strictEqual(
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, scriptRefs: 1, declaredPublic: true }),
+      'entry',
+    );
+    assert.strictEqual(
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, scriptRefs: 1, declaredPublic: false }),
+      'hidden',
+    );
+  });
+
+  test('script refs never rescue a wrapped symbol', () => {
+    assert.strictEqual(
+      classifyEntry({ externalRefs: 0, wrappedRefs: 1, scriptRefs: 3 }),
+      'hidden',
+    );
   });
 
   test('no refs but declared public → promoted to entry (framework hooks, unused API)', () => {
     assert.strictEqual(
-      classifyEntry({ externalRefs: 0, internalRefs: 0, declaredPublic: true }),
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, declaredPublic: true }),
       'entry',
     );
   });
 
   test('no refs and declared private → hidden', () => {
     assert.strictEqual(
-      classifyEntry({ externalRefs: 0, internalRefs: 0, declaredPublic: false }),
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, declaredPublic: false }),
       'hidden',
     );
   });
 
   test('usage outranks syntax: externally referenced private name is an entry', () => {
     assert.strictEqual(
-      classifyEntry({ externalRefs: 1, internalRefs: 0, declaredPublic: false }),
+      classifyEntry({ externalRefs: 1, wrappedRefs: 0, declaredPublic: false }),
       'entry',
     );
   });
 
-  test('usage outranks syntax: internally-only referenced exported name is hidden', () => {
+  test('usage outranks syntax: wrapped exported name is hidden', () => {
     // declaredPublic never overrides usage; the export clause case is handled
-    // upstream by isExportClauseLine before internal refs are counted.
+    // upstream by isExportClauseLine before wrapped refs are counted.
     assert.strictEqual(
-      classifyEntry({ externalRefs: 0, internalRefs: 3, declaredPublic: true }),
+      classifyEntry({ externalRefs: 0, wrappedRefs: 3, declaredPublic: true }),
       'hidden',
     );
   });
 
   test('alias: reference counts are meaningless — external refs do NOT make an import an entry', () => {
     assert.strictEqual(
-      classifyEntry({ externalRefs: 7, internalRefs: 2, alias: true }),
+      classifyEntry({ externalRefs: 7, wrappedRefs: 2, alias: true }),
       'hidden',
     );
   });
 
   test('alias re-published by this file → entry (barrel files, __init__.py)', () => {
     assert.strictEqual(
-      classifyEntry({ externalRefs: 0, internalRefs: 0, alias: true, declaredPublic: true }),
+      classifyEntry({ externalRefs: 0, wrappedRefs: 0, alias: true, declaredPublic: true }),
       'entry',
     );
   });
@@ -140,6 +168,66 @@ suite('entries: isExportClauseLine', () => {
 
   test('languages without an export clause concept → never', () => {
     assert.strictEqual(isExportClauseLine('go', 'export { foo }'), false);
+  });
+});
+
+suite('entries: isMainGuardRef', () => {
+  const at = (lines: string[]) => (i: number): string => lines[i] ?? '';
+
+  test('call in the guard block → dispatch, not an internal call', () => {
+    const lines = ['def main():', '    pass', '', "if __name__ == '__main__':", '    main()'];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 4), true);
+  });
+
+  test('one-liner guard', () => {
+    const lines = ['def main():', '    pass', '', "if __name__ == '__main__': main()"];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 3), true);
+  });
+
+  test('double quotes and loose spacing', () => {
+    const lines = ['if __name__=="__main__":', '    main()'];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 1), true);
+  });
+
+  test('nested inside try/if within the guard still matches', () => {
+    const lines = [
+      "if __name__ == '__main__':",
+      '    try:',
+      '        main()',
+      '    except KeyboardInterrupt:',
+      '        pass',
+    ];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 2), true);
+  });
+
+  test('plain top-level call → not a guard ref', () => {
+    const lines = ['def setup():', '    pass', '', 'setup()'];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 3), false);
+  });
+
+  test('call in an unrelated top-level block → not a guard ref', () => {
+    const lines = [
+      "if __name__ == '__main__':",
+      '    main()',
+      'if DEBUG:',
+      '    setup()',
+    ];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 3), false);
+  });
+
+  test('else branch of the guard does not match', () => {
+    const lines = ["if __name__ == '__main__':", '    main()', 'else:', '    helper()'];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 3), false);
+  });
+
+  test('blank lines inside the block are tolerated', () => {
+    const lines = ["if __name__ == '__main__':", '    setup()', '', '    main()'];
+    assert.strictEqual(isMainGuardRef('python', at(lines), 3), true);
+  });
+
+  test('other languages → never', () => {
+    const lines = ["if __name__ == '__main__':", '    main()'];
+    assert.strictEqual(isMainGuardRef('javascript', at(lines), 1), false);
   });
 });
 
