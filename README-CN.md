@@ -19,8 +19,6 @@
 
 <p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
 
-> 姊妹项目：[Navigation History](https://github.com/pyeprog/navigation-history)。
-
 ## 💭 为什么
 
 <p align="center">
