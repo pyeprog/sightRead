@@ -22,6 +22,11 @@ export function gutterIcon(color: MarkerColor): vscode.Uri {
   );
 }
 
+/** Theme color for marker-tinted labels — ids contributed in package.json `colors`. */
+export function markerThemeColor(color: MarkerColor): vscode.ThemeColor {
+  return new vscode.ThemeColor(`sightread.marker${color[0].toUpperCase()}${color.slice(1)}`);
+}
+
 /** Filled circle — used in tree views. */
 export function circleIcon(color: MarkerColor): vscode.Uri {
   return svgUri(

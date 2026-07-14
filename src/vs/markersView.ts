@@ -44,6 +44,28 @@ export class MarkersViewFeature
         );
         compositor.renderVisibleFor(node.uri);
       }),
+      vscode.commands.registerCommand(
+        'sightread.editMarkerNoteItem',
+        async (node: MarkersNode) => {
+          if (node?.kind !== 'marker') {
+            return;
+          }
+          const note = await vscode.window.showInputBox({
+            prompt: 'Marker note (empty to remove the note)',
+            value: node.marker.note ?? '',
+          });
+          if (note === undefined) {
+            return; // cancelled
+          }
+          repo.set(
+            node.uri,
+            repo
+              .get(node.uri)
+              .map((m) => (m.id === node.marker.id ? { ...m, note: note || undefined } : m)),
+          );
+          compositor.renderVisibleFor(node.uri);
+        },
+      ),
     );
   }
 

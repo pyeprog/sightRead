@@ -2,7 +2,7 @@
   "name": "sightread",
   "displayName": "SightRead",
   "description": "A reading lens for code: highlight, dim, fold and outline function segments to help you understand code in place.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "publisher": "WaylongLeon",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -56,24 +56,19 @@
         "icon": "$(unfold)"
       },
       {
-        "command": "sightread.mark",
-        "title": "SightRead: Mark Selection…",
+        "command": "sightread.markFavorite",
+        "title": "SightRead: Mark Selection (Favorite Color)",
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "sightread.markPickColor",
+        "title": "SightRead: Mark Selection (Pick Color)…",
         "icon": "$(symbol-color)"
       },
       {
-        "command": "sightread.markYellow",
-        "title": "SightRead: Mark Selection Yellow (key point)",
-        "icon": "$(star-full)"
-      },
-      {
-        "command": "sightread.markRed",
-        "title": "SightRead: Mark Selection Red (doubt)",
-        "icon": "$(question)"
-      },
-      {
-        "command": "sightread.markGreen",
-        "title": "SightRead: Mark Selection Green (verified)",
-        "icon": "$(check)"
+        "command": "sightread.mark",
+        "title": "SightRead: Mark Selection (Color + Note)…",
+        "icon": "$(note)"
       },
       {
         "command": "sightread.editMarkerNote",
@@ -100,6 +95,22 @@
         "command": "sightread.removeMarker",
         "title": "SightRead: Remove Marker",
         "icon": "$(trash)"
+      },
+      {
+        "command": "sightread.editMarkerNoteItem",
+        "title": "SightRead: Add/Edit Note"
+      },
+      {
+        "command": "sightread.markSegment",
+        "title": "SightRead: Mark Segment (Pick Color)…"
+      },
+      {
+        "command": "sightread.markSegmentWithNote",
+        "title": "SightRead: Mark Segment (Color + Note)…"
+      },
+      {
+        "command": "sightread.removeSegmentMarkers",
+        "title": "SightRead: Remove Markers in Segment"
       },
       {
         "command": "sightread.revealLocation",
@@ -170,6 +181,22 @@
           "when": "false"
         },
         {
+          "command": "sightread.editMarkerNoteItem",
+          "when": "false"
+        },
+        {
+          "command": "sightread.markSegment",
+          "when": "false"
+        },
+        {
+          "command": "sightread.markSegmentWithNote",
+          "when": "false"
+        },
+        {
+          "command": "sightread.removeSegmentMarkers",
+          "when": "false"
+        },
+        {
           "command": "sightread.revealLocation",
           "when": "false"
         }
@@ -196,29 +223,24 @@
           "group": "navigation@3"
         },
         {
-          "command": "sightread.markYellow",
+          "command": "sightread.markFavorite",
           "when": "view == sightread.markersView",
           "group": "navigation@1"
         },
         {
-          "command": "sightread.markRed",
+          "command": "sightread.markPickColor",
           "when": "view == sightread.markersView",
           "group": "navigation@2"
         },
         {
-          "command": "sightread.markGreen",
+          "command": "sightread.mark",
           "when": "view == sightread.markersView",
           "group": "navigation@3"
         },
         {
-          "command": "sightread.mark",
-          "when": "view == sightread.markersView",
-          "group": "navigation@4"
-        },
-        {
           "command": "sightread.removeAllMarkers",
           "when": "view == sightread.markersView",
-          "group": "1_actions"
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -226,6 +248,26 @@
           "command": "sightread.removeMarker",
           "when": "view == sightread.markersView && viewItem == marker",
           "group": "inline"
+        },
+        {
+          "command": "sightread.editMarkerNoteItem",
+          "when": "view == sightread.markersView && viewItem == marker",
+          "group": "1_note@1"
+        },
+        {
+          "command": "sightread.markSegment",
+          "when": "view == sightread.segmentsView",
+          "group": "1_mark@1"
+        },
+        {
+          "command": "sightread.markSegmentWithNote",
+          "when": "view == sightread.segmentsView",
+          "group": "1_mark@2"
+        },
+        {
+          "command": "sightread.removeSegmentMarkers",
+          "when": "view == sightread.segmentsView",
+          "group": "2_remove@1"
         }
       ],
       "editor/context": [
@@ -236,24 +278,20 @@
       ],
       "sightread.menu": [
         {
-          "command": "sightread.mark",
+          "command": "sightread.markFavorite",
           "group": "1_mark@1"
         },
         {
-          "command": "sightread.markYellow",
+          "command": "sightread.markPickColor",
           "group": "1_mark@2"
         },
         {
-          "command": "sightread.markRed",
+          "command": "sightread.mark",
           "group": "1_mark@3"
         },
         {
-          "command": "sightread.markGreen",
-          "group": "1_mark@4"
-        },
-        {
           "command": "sightread.editMarkerNote",
-          "group": "1_mark@5"
+          "group": "1_mark@4"
         },
         {
           "command": "sightread.removeMarkersInSelection",
@@ -285,6 +323,58 @@
         }
       ]
     },
+    "colors": [
+      {
+        "id": "sightread.markerYellow",
+        "description": "Label color of yellow-marked items in SightRead views.",
+        "defaults": {
+          "dark": "#FFC828",
+          "light": "#9E7A00",
+          "highContrast": "#FFC828",
+          "highContrastLight": "#9E7A00"
+        }
+      },
+      {
+        "id": "sightread.markerRed",
+        "description": "Label color of red-marked items in SightRead views.",
+        "defaults": {
+          "dark": "#FF6363",
+          "light": "#D13438",
+          "highContrast": "#FF6363",
+          "highContrastLight": "#D13438"
+        }
+      },
+      {
+        "id": "sightread.markerGreen",
+        "description": "Label color of green-marked items in SightRead views.",
+        "defaults": {
+          "dark": "#58C878",
+          "light": "#2E8B57",
+          "highContrast": "#58C878",
+          "highContrastLight": "#2E8B57"
+        }
+      },
+      {
+        "id": "sightread.markerBlue",
+        "description": "Label color of blue-marked items in SightRead views.",
+        "defaults": {
+          "dark": "#5A9CFF",
+          "light": "#2F6BD8",
+          "highContrast": "#5A9CFF",
+          "highContrastLight": "#2F6BD8"
+        }
+      },
+      {
+        "id": "sightread.markerPurple",
+        "description": "Label color of purple-marked items in SightRead views.",
+        "defaults": {
+          "dark": "#BB86FC",
+          "light": "#8250DF",
+          "highContrast": "#BB86FC",
+          "highContrastLight": "#8250DF"
+        }
+      }
+    ],
     "configuration": {
       "title": "SightRead",
       "properties": {
@@ -350,6 +440,18 @@
           "type": "string",
           "default": "#8C8C8C",
           "description": "Color of the entry-point gutter chevrons (any CSS color, e.g. #3794FF). Suspected entries use the same color at reduced opacity."
+        },
+        "sightread.marker.favoriteColor": {
+          "type": "string",
+          "enum": [
+            "yellow",
+            "red",
+            "green",
+            "blue",
+            "purple"
+          ],
+          "default": "yellow",
+          "description": "Color used by \"Mark Selection (Favorite Color)\" — the one-click bookmark button on the Markers view and in the editor context menu."
         },
         "sightread.marker.notePosition": {
           "type": "string",

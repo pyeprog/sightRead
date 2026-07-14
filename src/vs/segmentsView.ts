@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import { SPOTLIGHT_LEVEL_NAMES, SpotlightLevel, intersectsAny, pathToLine } from '../core/focus';
+import { markersInLineRange, removeInLineRange } from '../core/markers';
 import { SegmentKind } from '../core/segmentation';
-import { SpotlightRender } from './compositor';
+import { Compositor, SpotlightRender } from './compositor';
+import {
+  MarkerRepository,
+  addLineMarker,
+  pickMarkerColor,
+  promptMarkerNote,
+} from './highlighter';
+import { markerThemeColor } from './palette';
 import { DocSegmentNode, SegmentCache } from './segmentCache';
 import { FunctionInfo, findFunctionAtCursor } from './symbols';
 
@@ -81,7 +89,7 @@ export class SegmentsViewFeature
   readonly onDidChangeFileDecorations = this.decoEmitter.event;
   private subscriptions: vscode.Disposable[] = [];
 
-  constructor() {
+  constructor(private repo: MarkerRepository) {
     this.view = vscode.window.createTreeView('sightread.segmentsView', {
       treeDataProvider: this,
     });
@@ -93,6 +101,22 @@ export class SegmentsViewFeature
       this.view.onDidCollapseElement((e) => this.syncCodeFold(e.element, 'editor.fold')),
       this.view.onDidExpandElement((e) => this.syncCodeFold(e.element, 'editor.unfold')),
       vscode.window.registerFileDecorationProvider(this),
+      // marker mutations re-tint labels (decorations) and icons (tree items)
+      repo.onDidChange(() => {
+        this.emitter.fire();
+        this.decoEmitter.fire(undefined);
+      }),
+    );
+  }
+
+  /** Whether any marker intersects the segment's line range ("相交即染"). */
+  private isMarked(uriString: string, node: DocSegmentNode): boolean {
+    return (
+      markersInLineRange(
+        this.repo.get(vscode.Uri.parse(uriString)),
+        node.startLine,
+        node.endLine,
+      ).length > 0
     );
   }
 
@@ -199,10 +223,22 @@ export class SegmentsViewFeature
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-    if (uri.scheme !== 'sightread-seg' || !this.dimmedUris.has(uri.toString())) {
+    if (uri.scheme !== 'sightread-seg') {
       return undefined;
     }
-    return { color: DIM_COLOR };
+    // the segment's line range travels in the URI (path `/start-end`, query = doc uri)
+    const range = /^\/(\d+)-(\d+)$/.exec(uri.path);
+    const marker = range
+      ? markersInLineRange(
+          this.repo.get(vscode.Uri.parse(uri.query)),
+          Number(range[1]),
+          Number(range[2]),
+        )[0]
+      : undefined;
+    if (marker) {
+      return { color: markerThemeColor(marker.color) }; // marker tint wins over dim
+    }
+    return this.dimmedUris.has(uri.toString()) ? { color: DIM_COLOR } : undefined;
   }
 
   getTreeItem(el: SegmentElement): vscode.TreeItem {
@@ -220,11 +256,14 @@ export class SegmentsViewFeature
           : vscode.TreeItemCollapsibleState.Expanded,
     );
     item.id = `${el.uriString}:${el.node.startLine}-${el.node.endLine}:g${this.generation}`;
+    item.contextValue = 'segment';
     const resourceUri = segmentUri(el.uriString, el.node);
-    item.resourceUri = resourceUri; // carries the dim decoration (label color)
-    item.iconPath = this.dimmedUris.has(resourceUri.toString())
-      ? new vscode.ThemeIcon(KIND_ICONS[el.node.kind].icon, DIM_COLOR)
-      : segmentIcon(el.node.kind);
+    item.resourceUri = resourceUri; // carries the dim/marker decoration (label color)
+    // a marked segment keeps its normal icon even while dimmed, matching its tinted label
+    item.iconPath =
+      this.dimmedUris.has(resourceUri.toString()) && !this.isMarked(el.uriString, el.node)
+        ? new vscode.ThemeIcon(KIND_ICONS[el.node.kind].icon, DIM_COLOR)
+        : segmentIcon(el.node.kind);
     item.description = el.node.detail;
     const doc = vscode.workspace.textDocuments.find(
       (d) => d.uri.toString() === el.uriString,
@@ -273,6 +312,56 @@ export class SegmentsViewFeature
       d.dispose();
     }
   }
+}
+
+/** Right-click mark/unmark on Segments-view items (menus in package.json). */
+export function registerSegmentMarkCommands(
+  context: vscode.ExtensionContext,
+  repo: MarkerRepository,
+  compositor: Compositor,
+): void {
+  const docFor = async (el: SegmentElement): Promise<vscode.TextDocument> =>
+    vscode.workspace.textDocuments.find((d) => d.uri.toString() === el.uriString) ??
+    (await vscode.workspace.openTextDocument(vscode.Uri.parse(el.uriString)));
+  const markSegment = async (
+    el: SegmentElement | undefined,
+    withNote: boolean,
+  ): Promise<void> => {
+    if (!el) {
+      return;
+    }
+    const color = await pickMarkerColor();
+    if (!color) {
+      return;
+    }
+    const note = withNote ? await promptMarkerNote() : undefined;
+    addLineMarker(
+      repo,
+      compositor,
+      await docFor(el),
+      el.node.startLine,
+      el.node.endLine,
+      color,
+      note,
+    );
+  };
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sightread.markSegment', (el?: SegmentElement) =>
+      markSegment(el, false),
+    ),
+    vscode.commands.registerCommand('sightread.markSegmentWithNote', (el?: SegmentElement) =>
+      markSegment(el, true),
+    ),
+    vscode.commands.registerCommand('sightread.removeSegmentMarkers', (el?: SegmentElement) => {
+      if (!el) {
+        return;
+      }
+      const uri = vscode.Uri.parse(el.uriString);
+      const { markers } = removeInLineRange(repo.get(uri), el.node.startLine, el.node.endLine);
+      repo.set(uri, markers);
+      compositor.renderVisibleFor(uri);
+    }),
+  );
 }
 
 /** "Go to Segment…" — QuickPick over the flattened segment tree. */

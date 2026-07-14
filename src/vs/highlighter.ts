@@ -15,12 +15,36 @@ import { findFunctionAtCursor } from './symbols';
 const STORAGE_KEY = 'sightread.markers';
 
 const COLOR_LABELS: Record<MarkerColor, string> = {
-  yellow: '🟡 Yellow — key point',
-  red: '🔴 Red — doubt / question',
-  green: '🟢 Green — verified',
+  yellow: '🟡 Yellow',
+  red: '🔴 Red',
+  green: '🟢 Green',
   blue: '🔵 Blue',
   purple: '🟣 Purple',
 };
+
+export function favoriteColor(): MarkerColor {
+  const c = vscode.workspace
+    .getConfiguration('sightread')
+    .get<string>('marker.favoriteColor', 'yellow');
+  return (MARKER_COLORS as string[]).includes(c) ? (c as MarkerColor) : 'yellow';
+}
+
+export async function pickMarkerColor(): Promise<MarkerColor | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    MARKER_COLORS.map((c) => ({ label: COLOR_LABELS[c], color: c })),
+    { placeHolder: 'Marker color' },
+  );
+  return picked?.color;
+}
+
+/** Esc on the note prompt resolves to no note — the note is optional. */
+export async function promptMarkerNote(): Promise<string | undefined> {
+  const note = await vscode.window.showInputBox({
+    prompt: 'Note (optional, shown at the end of the first marked line)',
+    placeHolder: 'leave empty for no note',
+  });
+  return note || undefined;
+}
 
 let idCounter = 0;
 function newId(): string {
@@ -73,21 +97,36 @@ function selectionLineRange(editor: vscode.TextEditor): { start: number; end: nu
   return { start: sel.start.line, end };
 }
 
-async function addMarker(
+/** Creates a marker over a line range of `doc` (shared by selection and segment marking). */
+export function addLineMarker(
+  repo: MarkerRepository,
+  compositor: Compositor,
+  doc: vscode.TextDocument,
+  startLine: number,
+  endLine: number,
+  color: MarkerColor,
+  note: string | undefined,
+): void {
+  const start = Math.min(startLine, doc.lineCount - 1);
+  const end = Math.min(endLine, doc.lineCount - 1);
+  const firstLine = doc.lineAt(start).text.trim();
+  const preview =
+    firstLine.length > 50 ? firstLine.slice(0, 49) + '…' : firstLine || undefined;
+  const marker: Marker = { id: newId(), color, note, preview, startLine: start, endLine: end };
+  const { markers } = insertMarker(repo.get(doc.uri), marker);
+  repo.set(doc.uri, markers);
+  compositor.renderVisibleFor(doc.uri);
+}
+
+function addMarker(
   editor: vscode.TextEditor,
   repo: MarkerRepository,
   compositor: Compositor,
   color: MarkerColor,
   note: string | undefined,
-): Promise<void> {
+): void {
   const { start, end } = selectionLineRange(editor);
-  const firstLine = editor.document.lineAt(start).text.trim();
-  const preview =
-    firstLine.length > 50 ? firstLine.slice(0, 49) + '…' : firstLine || undefined;
-  const marker: Marker = { id: newId(), color, note, preview, startLine: start, endLine: end };
-  const { markers } = insertMarker(repo.get(editor.document.uri), marker);
-  repo.set(editor.document.uri, markers);
-  compositor.renderVisibleFor(editor.document.uri);
+  addLineMarker(repo, compositor, editor.document, start, end, color, note);
 }
 
 export function registerHighlighterCommands(
@@ -106,32 +145,25 @@ export function registerHighlighterCommands(
     vscode.commands.registerCommand(
       'sightread.mark',
       withEditor(async (editor) => {
-        const picked = await vscode.window.showQuickPick(
-          MARKER_COLORS.map((c) => ({ label: COLOR_LABELS[c], color: c })),
-          { placeHolder: 'Marker color' },
-        );
-        if (!picked) {
+        const color = await pickMarkerColor();
+        if (!color) {
           return;
         }
-        // Esc on the note prompt still creates the marker — the note is optional.
-        const note = await vscode.window.showInputBox({
-          prompt: 'Note (optional, shown at the end of the first marked line)',
-          placeHolder: 'leave empty for no note',
-        });
-        await addMarker(editor, repo, compositor, picked.color, note || undefined);
+        addMarker(editor, repo, compositor, color, await promptMarkerNote());
       }),
     ),
     vscode.commands.registerCommand(
-      'sightread.markYellow',
-      withEditor((editor) => addMarker(editor, repo, compositor, 'yellow', undefined)),
+      'sightread.markFavorite',
+      withEditor((editor) => addMarker(editor, repo, compositor, favoriteColor(), undefined)),
     ),
     vscode.commands.registerCommand(
-      'sightread.markRed',
-      withEditor((editor) => addMarker(editor, repo, compositor, 'red', undefined)),
-    ),
-    vscode.commands.registerCommand(
-      'sightread.markGreen',
-      withEditor((editor) => addMarker(editor, repo, compositor, 'green', undefined)),
+      'sightread.markPickColor',
+      withEditor(async (editor) => {
+        const color = await pickMarkerColor();
+        if (color) {
+          addMarker(editor, repo, compositor, color, undefined);
+        }
+      }),
     ),
     vscode.commands.registerCommand(
       'sightread.editMarkerNote',

@@ -36,10 +36,13 @@ suite('SightRead integration', () => {
       'sightread.foldSkeleton',
       'sightread.unfoldSkeleton',
       'sightread.mark',
-      'sightread.markYellow',
-      'sightread.markRed',
-      'sightread.markGreen',
+      'sightread.markFavorite',
+      'sightread.markPickColor',
+      'sightread.markSegment',
+      'sightread.markSegmentWithNote',
+      'sightread.removeSegmentMarkers',
       'sightread.editMarkerNote',
+      'sightread.editMarkerNoteItem',
       'sightread.removeMarkersInSelection',
       'sightread.removeMarkersInFunction',
       'sightread.removeMarkersInFile',
@@ -64,7 +67,7 @@ suite('SightRead integration', () => {
     const editor = await vscode.window.showTextDocument(doc);
 
     editor.selection = new vscode.Selection(1, 0, 2, 5);
-    await vscode.commands.executeCommand('sightread.markYellow');
+    await vscode.commands.executeCommand('sightread.markFavorite');
     let markers = api._test.repo.get(doc.uri);
     assert.strictEqual(markers.length, 1);
     assert.deepStrictEqual([markers[0].startLine, markers[0].endLine], [1, 2]);
@@ -90,7 +93,7 @@ suite('SightRead integration', () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(0, 0, 0, 5);
-    await vscode.commands.executeCommand('sightread.markYellow');
+    await vscode.commands.executeCommand('sightread.markFavorite');
 
     const marker = api._test.repo.get(doc.uri)[0];
     assert.ok(marker, 'marker should exist');
@@ -121,7 +124,7 @@ suite('SightRead integration', () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(0, 0, 1, 1);
-    await vscode.commands.executeCommand('sightread.markGreen');
+    await vscode.commands.executeCommand('sightread.markFavorite');
     assert.strictEqual(api._test.repo.get(doc.uri).length, 1);
     await vscode.commands.executeCommand('sightread.removeMarkersInFile');
     assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
@@ -587,6 +590,58 @@ suite('SightRead integration', () => {
       typeof view.getTreeItem(cursorEl).label,
       'string',
       'no anchor highlight while the spotlight is off',
+    );
+  });
+
+  test('a marker tints the intersecting segment item; removeSegmentMarkers clears it', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: [
+        'function tinted(a) {', // 0
+        '  if (a) {', //           1
+        '    use(a);', //          2
+        '  }', //                  3
+        '',
+        '  return a;', //          5
+        '}', //                    6
+        '',
+      ].join('\n'),
+      language: 'javascript',
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    const view = api._test.segmentsView;
+
+    // poll until the segment tree exists (language service warm-up)
+    let ifSeg;
+    for (let i = 0; i < 100; i++) {
+      const line = 2 + (i % 2) * 3; // alternate 2/5 to refire selection events
+      editor.selection = new vscode.Selection(line, 4, line, 4);
+      await sleep(200);
+      ifSeg = view
+        .getChildren()
+        .find((el) => el.node.startLine <= 2 && 2 <= el.node.endLine);
+      if (ifSeg) {
+        break;
+      }
+    }
+    assert.ok(ifSeg, 'segments view never produced the if segment');
+    const segUri = view.getTreeItem(ifSeg).resourceUri;
+    assert.ok(segUri, 'segment item should carry a decoration URI');
+    assert.strictEqual(view.provideFileDecoration(segUri), undefined, 'untinted before marking');
+
+    // a marker on one line inside the segment tints the whole item (partial overlap counts)
+    editor.selection = new vscode.Selection(2, 0, 2, 6);
+    await vscode.commands.executeCommand('sightread.markFavorite');
+    const deco = view.provideFileDecoration(segUri);
+    assert.ok(deco?.color, 'marked segment label should carry the marker color');
+
+    await vscode.commands.executeCommand('sightread.removeSegmentMarkers', ifSeg);
+    assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
+    assert.strictEqual(
+      view.provideFileDecoration(segUri),
+      undefined,
+      'tint should disappear with the marker',
     );
   });
 

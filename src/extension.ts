@@ -8,7 +8,11 @@ import {
 import { EntriesViewFeature, registerEntryCommands } from './vs/entriesView';
 import { MarkersViewFeature } from './vs/markersView';
 import { SegmentCache } from './vs/segmentCache';
-import { SegmentsViewFeature, registerGoToSegment } from './vs/segmentsView';
+import {
+  SegmentsViewFeature,
+  registerGoToSegment,
+  registerSegmentMarkCommands,
+} from './vs/segmentsView';
 import { registerSkeletonFoldCommands } from './vs/skeletonFold';
 import { SpotlightController } from './vs/spotlight';
 import { computeTint } from './vs/variableTint';
@@ -23,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const compositor = new Compositor((uri) => repo.get(uri));
   const spotlight = new SpotlightController();
   const markersView = new MarkersViewFeature(repo, compositor);
-  const segmentsView = new SegmentsViewFeature();
+  const segmentsView = new SegmentsViewFeature(repo);
   const entriesView = new EntriesViewFeature();
   context.subscriptions.push(compositor, markersView, segmentsView, entriesView);
   const spotlightStatus = vscode.window.createStatusBarItem(
@@ -105,6 +109,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     afterUnfold: () => segmentsView.expandAll(),
   });
   registerGoToSegment(context, segmentCache);
+  registerSegmentMarkCommands(context, repo, compositor);
   registerEntryCommands(context, entriesView);
   context.subscriptions.push(
     vscode.commands.registerCommand('sightread.spotlightCycle', () => {

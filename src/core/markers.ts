@@ -113,3 +113,11 @@ export function removeInLineRange(
 export function markersAtLine(markers: Marker[], line: number): Marker[] {
   return markers.filter((m) => intersectsLines(m, line, line));
 }
+
+export function markersInLineRange(
+  markers: Marker[],
+  startLine: number,
+  endLine: number,
+): Marker[] {
+  return markers.filter((m) => intersectsLines(m, startLine, endLine));
+}

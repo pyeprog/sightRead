@@ -70,10 +70,9 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 |---|---|
 | `SightRead: Fold Skeleton (Current Function)` | fold every block inside the current function to see its large structure |
 | `SightRead: Unfold Skeleton (Current Function)` | unfold them again |
-| `SightRead: Mark Selection…` | highlighter-mark the selection, picking a color and an optional note |
-| `SightRead: Mark Selection Yellow (key point)` | one-tap yellow marker |
-| `SightRead: Mark Selection Red (doubt)` | one-tap red marker |
-| `SightRead: Mark Selection Green (verified)` | one-tap green marker |
+| `SightRead: Mark Selection (Favorite Color)` | one-click marker in your favorite color (`sightread.marker.favoriteColor`) |
+| `SightRead: Mark Selection (Pick Color)…` | highlighter-mark the selection, picking a color |
+| `SightRead: Mark Selection (Color + Note)…` | pick a color and attach an optional note |
 | `SightRead: Add/Edit Marker Note` | attach or edit the short note on the marker under the cursor |
 | `SightRead: Remove Markers in Selection` | clear markers touching the selection |
 | `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
@@ -99,6 +98,7 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `sightread.entries.showSuspected` | `true` | show "suspected" entries (symbols with no references found) |
 | `sightread.entries.gutterIcons` | `true` | mark entry lines with gutter chevrons (») |
 | `sightread.entries.iconColor` | `#8C8C8C` | chevron color; suspected entries use it at reduced opacity |
+| `sightread.marker.favoriteColor` | `yellow` | color used by `Mark Selection (Favorite Color)` |
 | `sightread.marker.notePosition` | `lineEnd` | marker note at line start or line end |
 
 ## 🛠️ Development

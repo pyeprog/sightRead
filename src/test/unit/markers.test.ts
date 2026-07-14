@@ -6,6 +6,7 @@ import {
   applyChanges,
   insertMarker,
   markersAtLine,
+  markersInLineRange,
   removeInLineRange,
 } from '../../core/markers';
 
@@ -104,5 +105,12 @@ suite('markers: insert/remove helpers', () => {
     const ms = [marker(0, 1, 'a'), marker(3, 5, 'b')];
     assert.deepStrictEqual(markersAtLine(ms, 4).map((m) => m.id), ['b']);
     assert.deepStrictEqual(markersAtLine(ms, 2), []);
+  });
+
+  test('markersInLineRange keeps partial overlaps and drops the rest', () => {
+    const ms = [marker(0, 1, 'a'), marker(3, 5, 'b'), marker(7, 8, 'c')];
+    assert.deepStrictEqual(markersInLineRange(ms, 4, 7).map((m) => m.id), ['b', 'c']);
+    assert.deepStrictEqual(markersInLineRange(ms, 2, 2), []);
+    assert.deepStrictEqual(markersInLineRange(ms, 1, 3).map((m) => m.id), ['a', 'b']);
   });
 });
