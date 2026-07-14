@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Marker } from '../core/markers';
+import { Marker, markersAtLine } from '../core/markers';
 import { Compositor } from './compositor';
 import { MarkerRepository } from './highlighter';
 import { circleIcon } from './palette';
@@ -72,6 +72,7 @@ export class MarkersViewFeature
   getTreeItem(node: MarkersNode): vscode.TreeItem {
     if (node.kind === 'file') {
       const item = new vscode.TreeItem(node.uri, vscode.TreeItemCollapsibleState.Expanded);
+      item.id = `file:${node.uri.toString()}`;
       item.contextValue = 'file';
       item.description = String(this.repo.get(node.uri).length);
       return item;
@@ -81,6 +82,7 @@ export class MarkersViewFeature
       m.note ?? m.preview ?? `L${m.startLine + 1}`,
       vscode.TreeItemCollapsibleState.None,
     );
+    item.id = `marker:${node.uri.toString()}:${m.id}`;
     const lines = `L${m.startLine + 1}–${m.endLine + 1}`;
     item.description = m.note && m.preview ? `${lines} · ${m.preview}` : lines;
     item.iconPath = circleIcon(m.color);
@@ -92,6 +94,30 @@ export class MarkersViewFeature
       arguments: [node.uri.toString(), m.startLine],
     };
     return item;
+  }
+
+  /** Required by TreeView.reveal — markers live under their file group. */
+  getParent(node: MarkersNode): MarkersNode | undefined {
+    return node.kind === 'marker' ? { kind: 'file', uri: node.uri } : undefined;
+  }
+
+  /** Follows the cursor: selects the marker under it, without stealing focus. */
+  async revealCursor(doc: vscode.TextDocument, pos: vscode.Position): Promise<void> {
+    if (!this.view.visible) {
+      return;
+    }
+    const marker = markersAtLine(this.repo.get(doc.uri), pos.line)[0];
+    if (!marker) {
+      return;
+    }
+    try {
+      await this.view.reveal(
+        { kind: 'marker', uri: doc.uri, marker },
+        { select: true, focus: false },
+      );
+    } catch (_e) {
+      // best-effort: the repo may have changed mid-reveal
+    }
   }
 
   getChildren(node?: MarkersNode): MarkersNode[] {

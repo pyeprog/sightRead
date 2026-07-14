@@ -20,6 +20,18 @@ export interface FunctionInfo {
 interface Candidate extends EnclosingCandidate {
   name: string;
   range: vscode.Range;
+  kind: vscode.SymbolKind;
+  /** range of the symbol's own name; absent for SymbolInformation providers */
+  selectionRange?: vscode.Range;
+  containerName?: string;
+}
+
+/** The trail's view of the symbol under the cursor (design.md §3.7). */
+export interface SymbolAtCursor extends FunctionInfo {
+  kind: vscode.SymbolKind;
+  containerName?: string;
+  /** the cursor sits on the symbol's own name */
+  onName: boolean;
 }
 
 export interface EnclosingFunctions {
@@ -27,6 +39,9 @@ export interface EnclosingFunctions {
   fn?: FunctionInfo;
   /** the widest function-like symbol containing the cursor (`fn` itself when nothing wraps it) */
   outermost?: FunctionInfo;
+  /** innermost symbol under the cursor — unlike `fn`, a header line counts as
+   *  the symbol itself, and the kind/name-range info the trail needs is kept */
+  at?: SymbolAtCursor;
 }
 
 /** Multi-line symbols whose line span contains `pos` (line-based, so the
@@ -45,7 +60,10 @@ async function collectContaining(
   }
 
   const containing: Candidate[] = [];
-  const visit = (s: vscode.DocumentSymbol | vscode.SymbolInformation): void => {
+  const visit = (
+    s: vscode.DocumentSymbol | vscode.SymbolInformation,
+    container?: string,
+  ): void => {
     const range = 'location' in s ? s.location.range : s.range;
     if (pos.line < range.start.line || pos.line > range.end.line) {
       return;
@@ -57,13 +75,17 @@ async function collectContaining(
         fnKind: FUNCTION_KINDS.has(s.kind),
         name: s.name,
         range,
+        kind: s.kind,
+        selectionRange: 'selectionRange' in s ? s.selectionRange : undefined,
+        containerName:
+          'containerName' in s && s.containerName ? s.containerName : container,
       });
     }
     if ('children' in s) {
-      s.children.forEach(visit);
+      s.children.forEach((c) => visit(c, s.name));
     }
   };
-  (roots ?? []).forEach(visit);
+  (roots ?? []).forEach((s) => visit(s, undefined));
   return containing;
 }
 
@@ -83,9 +105,21 @@ export async function findEnclosingFunctions(
   pos: vscode.Position,
 ): Promise<EnclosingFunctions> {
   const containing = await collectContaining(doc, pos);
+  const at = chooseInnermostFunction(containing);
   return {
     fn: info(chooseEnclosingFunction(containing, pos.line)),
     outermost: info(chooseOutermostFunction(containing)),
+    at: at
+      ? {
+          name: at.name,
+          range: at.range,
+          kind: at.kind,
+          containerName: at.containerName,
+          onName: at.selectionRange
+            ? at.selectionRange.contains(pos)
+            : pos.line === at.range.start.line,
+        }
+      : undefined,
   };
 }
 

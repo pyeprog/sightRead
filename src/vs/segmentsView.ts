@@ -364,6 +364,82 @@ export function registerSegmentMarkCommands(
   );
 }
 
+/**
+ * Right-click deep fold/unfold on Segments-view items: every folding region
+ * INSIDE the segment (its own region excluded — folding it would hide the
+ * very structure being inspected). Regions come from the language's folding
+ * provider when available, falling back to the segment tree's heuristic
+ * header lines, mirroring skeleton fold (design.md §3.1).
+ */
+export function registerSegmentFoldCommands(context: vscode.ExtensionContext): void {
+  const linesInside = async (el: SegmentElement): Promise<number[]> => {
+    try {
+      const ranges = await vscode.commands.executeCommand<vscode.FoldingRange[]>(
+        'vscode.executeFoldingRangeProvider',
+        vscode.Uri.parse(el.uriString),
+      );
+      if (ranges && ranges.length > 0) {
+        return ranges
+          .filter((r) => r.start > el.node.startLine && r.end <= el.node.endLine)
+          .map((r) => r.start);
+      }
+    } catch (_e) {
+      // command or provider unavailable — fall back to the heuristic headers
+    }
+    const lines: number[] = [];
+    const walk = (ns: DocSegmentNode[]): void => {
+      for (const n of ns) {
+        lines.push(...(n.headerLines ?? []));
+        walk(n.children);
+      }
+    };
+    walk([el.node]);
+    return lines.filter((l) => l > el.node.startLine);
+  };
+  // editor.fold/unfold act on the active editor only
+  const activeMatches = (el: SegmentElement): boolean =>
+    vscode.window.activeTextEditor?.document.uri.toString() === el.uriString;
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'sightread.foldSegmentDeep',
+      async (el?: SegmentElement) => {
+        if (!el || !activeMatches(el)) {
+          return;
+        }
+        const lines = await linesInside(el);
+        if (lines.length > 0) {
+          await vscode.commands.executeCommand('editor.fold', {
+            levels: 1,
+            selectionLines: lines,
+          });
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      'sightread.unfoldSegmentDeep',
+      async (el?: SegmentElement) => {
+        if (!el || !activeMatches(el)) {
+          return;
+        }
+        // reveal the segment itself first: unfolding only the inner regions
+        // of a collapsed segment changes nothing on screen (skeleton-fold lesson)
+        await vscode.commands.executeCommand('editor.unfold', {
+          direction: 'up',
+          levels: 32,
+          selectionLines: [el.node.startLine],
+        });
+        const lines = await linesInside(el);
+        if (lines.length > 0) {
+          await vscode.commands.executeCommand('editor.unfold', {
+            levels: 1,
+            selectionLines: lines,
+          });
+        }
+      },
+    ),
+  );
+}
+
 /** "Go to Segment…" — QuickPick over the flattened segment tree. */
 export function registerGoToSegment(
   context: vscode.ExtensionContext,

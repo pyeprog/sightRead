@@ -488,6 +488,38 @@ export class EntriesViewFeature
     return visible;
   }
 
+  /** Required by TreeView.reveal — only members have a parent. */
+  getParent(el: EntrySymbol): EntrySymbol | undefined {
+    return el.scan.symbols.find((s) => s.members.includes(el));
+  }
+
+  /**
+   * Follows the cursor: selects the top-level entry containing it, without
+   * stealing focus. Deliberately never targets members — revealing one would
+   * expand its container and trigger the lazy member classification from a
+   * mere cursor move.
+   */
+  async revealCursor(doc: vscode.TextDocument, pos: vscode.Position): Promise<void> {
+    if (!this.view.visible) {
+      return;
+    }
+    const scan = this.scans.get(doc.uri.toString());
+    if (!scan) {
+      return;
+    }
+    const target = this.visibleSymbols(scan.symbols).find(
+      (s) => s.range.start.line <= pos.line && pos.line <= s.range.end.line,
+    );
+    if (!target) {
+      return;
+    }
+    try {
+      await this.view.reveal(target, { select: true, focus: false });
+    } catch (_e) {
+      // best-effort: the scan may have refreshed mid-reveal
+    }
+  }
+
   private async memberChildren(el: EntrySymbol): Promise<EntrySymbol[]> {
     if (!el.membersScan) {
       el.membersScan = (async (): Promise<void> => {

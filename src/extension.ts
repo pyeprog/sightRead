@@ -11,10 +11,12 @@ import { SegmentCache } from './vs/segmentCache';
 import {
   SegmentsViewFeature,
   registerGoToSegment,
+  registerSegmentFoldCommands,
   registerSegmentMarkCommands,
 } from './vs/segmentsView';
 import { registerSkeletonFoldCommands } from './vs/skeletonFold';
 import { SpotlightController } from './vs/spotlight';
+import { TrailViewFeature, registerTrailCommands } from './vs/trailView';
 import { computeTint } from './vs/variableTint';
 import { findEnclosingFunctions } from './vs/symbols';
 import { SPOTLIGHT_LEVEL_NAMES } from './core/focus';
@@ -29,7 +31,8 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const markersView = new MarkersViewFeature(repo, compositor);
   const segmentsView = new SegmentsViewFeature(repo);
   const entriesView = new EntriesViewFeature();
-  context.subscriptions.push(compositor, markersView, segmentsView, entriesView);
+  const trailView = new TrailViewFeature(repo);
+  context.subscriptions.push(compositor, markersView, segmentsView, entriesView, trailView);
   const spotlightStatus = vscode.window.createStatusBarItem(
     'sightread.spotlight',
     vscode.StatusBarAlignment.Right,
@@ -57,10 +60,25 @@ export function activate(context: vscode.ExtensionContext): unknown {
     const doc = editor.document;
     const pos = editor.selection.active;
 
-    const { fn, outermost } = await findEnclosingFunctions(doc, pos);
+    const { fn, outermost, at } = await findEnclosingFunctions(doc, pos);
+    // the trail is fed even when this refresh is already superseded: the
+    // state remains a valid observation of the position it was computed for,
+    // and a superseded refresh is exactly what a jump's departure looks like
+    const wordRange = doc.getWordRangeAtPosition(pos);
+    trailView.onSettled({
+      uriString: doc.uri.toString(),
+      line: pos.line,
+      character: pos.character,
+      word: wordRange ? doc.getText(wordRange) : undefined,
+      at,
+      lineCount: doc.lineCount,
+      atMs: Date.now(),
+    });
     if (token !== pipelineToken) {
       return;
     }
+    void entriesView.revealCursor(doc, pos);
+    void markersView.revealCursor(doc, pos);
     const tintEnabled = vscode.workspace
       .getConfiguration('sightread')
       .get('variableTint.enabled', true);
@@ -110,7 +128,9 @@ export function activate(context: vscode.ExtensionContext): unknown {
   });
   registerGoToSegment(context, segmentCache);
   registerSegmentMarkCommands(context, repo, compositor);
+  registerSegmentFoldCommands(context);
   registerEntryCommands(context, entriesView);
+  registerTrailCommands(context, trailView);
   context.subscriptions.push(
     vscode.commands.registerCommand('sightread.spotlightCycle', () => {
       spotlight.cycle();
@@ -180,7 +200,16 @@ export function activate(context: vscode.ExtensionContext): unknown {
 
   // exposed for integration tests only
   return {
-    _test: { repo, segmentCache, compositor, spotlight, markersView, entriesView, segmentsView },
+    _test: {
+      repo,
+      segmentCache,
+      compositor,
+      spotlight,
+      markersView,
+      entriesView,
+      segmentsView,
+      trailView,
+    },
   };
 }
 

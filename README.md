@@ -60,7 +60,8 @@ Five orthogonal features, each providing a different kind of visual assistance (
   4. **Off** — spotlight off, the default mode.
 - 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
 - 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
-- 🗂️ **Sidebar** — the SightRead activity-bar container holds three views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree) and **Markers** (all highlighter marks in the workspace).
+- 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan, no LLM — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site, functions reached from several callers get a `↗ n callers` badge, and nodes whose body carries a highlighter marker are tinted in the marker's color. The trail lives in memory only and is discarded when the window closes.
+- 🗂️ **Sidebar** — the SightRead activity-bar container holds four views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree), **Markers** (all highlighter marks in the workspace) and **Trail** (the call structure you have walked). All four follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
 
 ## ⌨️ Commands
 
@@ -84,6 +85,9 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `SightRead: Go to Segment…` | QuickPick over the current function's segments |
 | `SightRead: Go to Entry Point…` | QuickPick over the file's entry points |
 | `SightRead: Refresh Entry Points` | re-scan the current file's entries |
+| `SightRead: Pin Current Function to Trail` | seed the trail with the current function as a root |
+| `SightRead: Pause Trail Recording` / `Resume Trail Recording` | stop/restart recording while the Trail view stays open |
+| `SightRead: Clear Trail` | discard the recorded call map |
 
 ## ⚙️ Settings
 

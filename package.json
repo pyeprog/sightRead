@@ -2,7 +2,7 @@
   "name": "sightread",
   "displayName": "SightRead",
   "description": "A reading lens for code: highlight, dim, fold and outline function segments to help you understand code in place.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "WaylongLeon",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -141,6 +141,39 @@
         "command": "sightread.refreshEntries",
         "title": "SightRead: Refresh Entry Points",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "sightread.foldSegmentDeep",
+        "title": "SightRead: Fold All Inside Segment"
+      },
+      {
+        "command": "sightread.unfoldSegmentDeep",
+        "title": "SightRead: Unfold All Inside Segment"
+      },
+      {
+        "command": "sightread.trailPin",
+        "title": "SightRead: Pin Current Function to Trail",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "sightread.trailPause",
+        "title": "SightRead: Pause Trail Recording",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "sightread.trailResume",
+        "title": "SightRead: Resume Trail Recording",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "sightread.trailClear",
+        "title": "SightRead: Clear Trail",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "sightread.trailRemove",
+        "title": "SightRead: Remove from Trail",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -165,9 +198,19 @@
         {
           "id": "sightread.markersView",
           "name": "Markers"
+        },
+        {
+          "id": "sightread.trailView",
+          "name": "Trail"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "sightread.trailView",
+        "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
+      }
+    ],
     "submenus": [
       {
         "id": "sightread.menu",
@@ -199,6 +242,26 @@
         {
           "command": "sightread.revealLocation",
           "when": "false"
+        },
+        {
+          "command": "sightread.foldSegmentDeep",
+          "when": "false"
+        },
+        {
+          "command": "sightread.unfoldSegmentDeep",
+          "when": "false"
+        },
+        {
+          "command": "sightread.trailRemove",
+          "when": "false"
+        },
+        {
+          "command": "sightread.trailPause",
+          "when": "!sightread.trailPaused"
+        },
+        {
+          "command": "sightread.trailResume",
+          "when": "sightread.trailPaused"
         }
       ],
       "view/title": [
@@ -241,6 +304,26 @@
           "command": "sightread.removeAllMarkers",
           "when": "view == sightread.markersView",
           "group": "navigation@4"
+        },
+        {
+          "command": "sightread.trailPause",
+          "when": "view == sightread.trailView && !sightread.trailPaused",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sightread.trailResume",
+          "when": "view == sightread.trailView && sightread.trailPaused",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sightread.trailPin",
+          "when": "view == sightread.trailView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sightread.trailClear",
+          "when": "view == sightread.trailView",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -268,6 +351,21 @@
           "command": "sightread.removeSegmentMarkers",
           "when": "view == sightread.segmentsView",
           "group": "2_remove@1"
+        },
+        {
+          "command": "sightread.foldSegmentDeep",
+          "when": "view == sightread.segmentsView",
+          "group": "3_fold@1"
+        },
+        {
+          "command": "sightread.unfoldSegmentDeep",
+          "when": "view == sightread.segmentsView",
+          "group": "3_fold@2"
+        },
+        {
+          "command": "sightread.trailRemove",
+          "when": "view == sightread.trailView && viewItem == trailNode",
+          "group": "inline"
         }
       ],
       "editor/context": [

@@ -5,6 +5,7 @@ import type { EntriesViewFeature } from '../../vs/entriesView';
 import type { MarkerRepository } from '../../vs/highlighter';
 import type { MarkersViewFeature } from '../../vs/markersView';
 import type { SegmentsViewFeature } from '../../vs/segmentsView';
+import type { TrailViewFeature } from '../../vs/trailView';
 
 interface TestApi {
   _test: {
@@ -13,6 +14,7 @@ interface TestApi {
     markersView: MarkersViewFeature;
     entriesView: EntriesViewFeature;
     segmentsView: SegmentsViewFeature;
+    trailView: TrailViewFeature;
   };
 }
 
@@ -701,6 +703,182 @@ suite('SightRead integration', () => {
       view.getTreeItem(visible[0]).command?.command,
       'sightread.revealLocation',
     );
+  });
+
+  test('trail: a real go-to-definition jump records caller → callee', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const trail = api._test.trailView;
+    // recording is gated on the view being visible
+    await vscode.commands.executeCommand('sightread.trailView.focus');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function callee() {',
+        '  return 1;',
+        '}',
+        '',
+        'function caller() {',
+        '  const x = callee();',
+        '  return x + 1;',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    trail.clear();
+    const callSite = new vscode.Position(5, 14); // on `callee` in `const x = callee();`
+    const edge = (): { callsiteLine: number } | undefined => {
+      const root = trail.graph.roots().find((r) => r.name === 'caller');
+      return root
+        ? trail.graph.children(root.key).find((c) => c.node.name === 'callee')
+        : undefined;
+    };
+    // retry until the JS language service is warm enough to jump and verify
+    for (let i = 0; i < 20 && !edge(); i++) {
+      editor.selection = new vscode.Selection(callSite, callSite);
+      await sleep(400); // departure state settles through the cursor pipeline
+      await vscode.commands.executeCommand('editor.action.revealDefinition');
+      await sleep(600); // landing settles + definition-provider verification
+    }
+    assert.ok(edge(), 'expected a caller → callee edge after go-to-definition');
+    assert.strictEqual(edge()!.callsiteLine, 5);
+    trail.clear();
+  });
+
+  test('trail: a FAST jump (no pause on the call site) is still recorded', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const trail = api._test.trailView;
+    await vscode.commands.executeCommand('sightread.trailView.focus');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function fast() {',
+        '  return 2;',
+        '}',
+        '',
+        'function rush() {',
+        '  return fast();',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    trail.clear();
+    const callSite = new vscode.Position(5, 12); // on `fast` in `return fast();`
+    const parked = new vscode.Position(7, 0); // away from the call, so each retry re-jumps
+    const edge = (): { callsiteLine: number } | undefined => {
+      const root = trail.graph.roots().find((r) => r.name === 'rush');
+      return root
+        ? trail.graph.children(root.key).find((c) => c.node.name === 'fast')
+        : undefined;
+    };
+    for (let i = 0; i < 20 && !edge(); i++) {
+      editor.selection = new vscode.Selection(parked, parked);
+      await sleep(300);
+      // click on the call and jump immediately — inside the pipeline debounce
+      // window, so the departure never settles and only the raw trace has it
+      editor.selection = new vscode.Selection(callSite, callSite);
+      await vscode.commands.executeCommand('editor.action.revealDefinition');
+      await sleep(600);
+    }
+    assert.ok(edge(), 'expected a rush → fast edge from the raw-trace fallback');
+    assert.strictEqual(edge()!.callsiteLine, 5);
+    trail.clear();
+  });
+
+  test('trail: ↗ badge appears at 2 discovered callers, ↻ on a recursion leaf', async function () {
+    this.timeout(60000);
+    const api = await getApi();
+    const trail = api._test.trailView;
+    await vscode.commands.executeCommand('sightread.trailView.focus');
+
+    // --- convergence: read `shared`, then visit call sites in two callers ---
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function shared() {', //           0, name at 9-14
+        '  return 1;',
+        '}',
+        '',
+        'function alpha() {', //            4
+        '  return shared();', //            5, `shared` at 9-14
+        '}',
+        '',
+        'function beta() {', //             8
+        '  return shared() + 2;', //        9
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    trail.clear();
+    const goTo = (line: number, ch: number): void => {
+      const p = new vscode.Position(line, ch);
+      editor.selection = new vscode.Selection(p, p);
+    };
+    const sharedNode = (): { key: string } | undefined =>
+      trail.graph
+        .roots()
+        .flatMap((r) => trail.graph.children(r.key))
+        .find((c) => c.node.name === 'shared')?.node;
+    const callers = (): number => {
+      const node = sharedNode();
+      return node ? trail.graph.inDegree(node.key) : 0;
+    };
+    for (let i = 0; i < 15 && callers() < 2; i++) {
+      goTo(0, 12); // on shared's own name — "the symbol being read"
+      await sleep(300);
+      goTo(5, 12); // its call site inside alpha → ref-jump: alpha → shared
+      await sleep(500);
+      goTo(0, 12);
+      await sleep(300);
+      goTo(9, 12); // its call site inside beta → ref-jump: beta → shared
+      await sleep(500);
+    }
+    assert.strictEqual(callers(), 2, 'expected shared to have 2 discovered callers');
+    const alphaRoot = trail.graph.roots().find((r) => r.name === 'alpha');
+    assert.ok(alphaRoot, 'alpha should be a root');
+    const mirror = trail
+      .getChildren({ key: alphaRoot!.key, path: [], recursive: false })
+      .find((c) => c.key === sharedNode()!.key);
+    assert.ok(mirror, 'shared should appear under alpha');
+    const badge = String(trail.getTreeItem(mirror!).description);
+    assert.ok(badge.includes('↗ 2 callers'), `description was: "${badge}"`);
+
+    // --- recursion: from the self-call site onto the function's own name ---
+    const rdoc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function recur(n) {', //                        0, name at 9-13
+        '  return n <= 0 ? 0 : recur(n - 1);', //        1, `recur` at 22-26
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const reditor = await vscode.window.showTextDocument(rdoc);
+    trail.clear();
+    const selfEdge = (): boolean => {
+      const root = trail.graph.roots().find((r) => r.name === 'recur');
+      return !!root && trail.graph.children(root.key).some((c) => c.node.key === root.key);
+    };
+    for (let i = 0; i < 15 && !selfEdge(); i++) {
+      const p1 = new vscode.Position(1, 24);
+      reditor.selection = new vscode.Selection(p1, p1); // on the recursive call
+      await sleep(300);
+      const p2 = new vscode.Position(0, 11);
+      reditor.selection = new vscode.Selection(p2, p2); // onto recur's own name
+      await sleep(500);
+    }
+    assert.ok(selfEdge(), 'expected a recur → recur self edge');
+    const rootKey = trail.graph.roots().find((r) => r.name === 'recur')!.key;
+    const leaf = trail
+      .getChildren({ key: rootKey, path: [], recursive: false })
+      .find((c) => c.recursive);
+    assert.ok(leaf, 'the self-occurrence should be projected as a recursion leaf');
+    assert.ok(String(trail.getTreeItem(leaf!).description).includes('↻'));
+    trail.clear();
   });
 
   test('spotlight cycles through levels without error', async () => {

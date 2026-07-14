@@ -36,6 +36,7 @@
 - **两个教训**（2026-07-07 两轮修复）：① `editor.fold` 不带 `levels`/`direction` 时走"已折叠则折其父区"的交互路径（`setCollapseStateUp`），候选行与语言折叠模型稍有不一致就会波及 method 乃至整个 class——程序化折叠必须显式传 `levels: 1`；② 启发式头行和语言折叠区不保证一致，能拿到 provider 真实区间就用真实区间。
 - 不注册 FoldingRangeProvider，复用语言自带折叠区间。零冲突表面。
 - **与 Segments 树联动**（2026-07-07）：树节点折叠/展开 → 对应代码区折叠/展开（`editor.fold/unfold` + `selectionLines`）；Segments 标题栏的 fold/unfold 按钮双向同步（fold 折代码并收起整棵树，unfold 反之）。反方向（编辑器里手动点折叠箭头 → 树收起）做不了：平台没有代码折叠变化的公开事件。
+- **Segments item 右键深折叠**（2026-07-14）：`Fold/Unfold All Inside Segment` 折/展该段**内部**的全部折叠区（自身区排除——折掉自己就看不到正在检视的结构了）。区间来源与骨架折叠同构：优先语言折叠 provider（过滤为严格落在段内），退化为段落树 headerLines；unfold 先向上展开该段自身（骨架折叠的教训）。只作用于编辑器，树的展开态不动（单向同步的既有限制）。
 
 ### 3.2 荧光笔（marker）
 
@@ -47,6 +48,7 @@
   - **自动**：任何编辑与标记行范围相交 → 标记删除；其余编辑只做行号平移。
   - **手动批量**：删除选区内 / 当前函数内 / 当前文件内 / 全 workspace（带确认）。
 - 侧边栏 **Markers 视图**：按文件分组列出全部标记（创建时快照的首行文本 + 说明 + 行号），点击跳转，行内垃圾桶单删；标题栏带三个快捷涂色按钮（★ 黄 / ? 红 / ✓ 绿）+ 选色涂色 + 溢出菜单一键全删。
+- **视图跟随光标**（2026-07-14）：光标落在某标记行内 → Markers 视图选中该条目（`reveal({select, focus:false})`，segmentsView 同款；条目 id 稳定化以支持 reveal）。
 
 ### 3.3 变量染色（variable tint）
 
@@ -112,6 +114,31 @@
 - **导入名永不是入口**（其引用属于原符号），除非文件刻意再发布（`export { x }`、`__all__`）——barrel 文件与 `__init__.py` 因此保有入口。
 - 入口类懒展开、逐方法分类；`Go to Entry Point…` QuickPick；编辑器 gutter 雪佛龙（»）标注入口行（`sightread.entries.gutterIcons` 默认开，颜色 `sightread.entries.iconColor`，疑似入口降透明度）。
 - 扫描只在视图可见或 gutter 图标开启时运行，按文档版本缓存，引用查询完成即流式补全结果。
+- **视图跟随光标**（2026-07-14）：光标落在某入口符号范围内 → 视图选中该条目。刻意只 reveal 顶层符号、不下钻 member——reveal member 会展开容器并触发懒分类的引用查询，被动的光标移动不应引发主动扫描。
+
+### 3.7 阅读轨迹（trail，2026-07-14）
+
+- **动机**：现有功能都在单文件/单函数尺度辅助阅读，缺少函数与函数之间调用关系的表达。其他插件的做法是全量扫描（LLM 或 language server）生成外部文档 / WebView——慢、有成本、排版非标准化。Trail 反其道：**用户自然阅读，结构自然显现**——读者的 drill-in 与引用跳转本身就是调用结构的发现过程，走过的路即地图。
+- **数据是图，视图是树投影**（`core/trail.ts`）。调用关系本质是 DAG 且可能有环，树状存储表达不了（Navigation History 的教训：模型与视图不分离，导致"调用方成为父节点"做不到）。节点 = 函数/方法/类/模块（script 顶层代码归模块节点），边 = "调用方 → 被调方"，边上存**已知最早**的 callsite 行。树投影每次渲染现算：被多个调用方调用的函数在每个调用方下都出现（镜像节点懒展开、共享子树），环沿祖先链截断为 ↻ 叶子；纯环成分无严格根时按创建序补根。ref-jump 发现调用方 ⇒ 被读函数自动不再是根——**re-root 是图的自然结果，无需特判**。子节点按 callsite 升序排列 = 被调方在父函数叙事中的出场顺序。
+- **节点永远是落点的 enclosing symbol**，不是光标下的任意 symbol（Navigation History 的变量污染从源头消失）。`vs/symbols.ts` 在同一次 DocumentSymbol 查询里多算第三种语义 `at`：最内层符号、**头行算符号本身**（区别于聚光灯的头行让位），并携带 kind/名字范围/容器名。
+- **边只由已验证的结构性跳转产生**（precision-first，`core/jumpClassify.ts`）：
+  - **drill-in**：落点在某符号自己的名字上，且出发点的词 == 该符号名（去参数表，C 族符号名带参数表）→ 出发 scope 调用落点符号；
+  - **ref-jump**：落点的词 == 刚读符号名，且不落在任何定义的名字上 → 落点 scope 调用该符号（调用方成为父节点）；
+  - 识别的是**语义签名而非输入手势**：F12 / Cmd+Click / peek 选择 / 肉眼找到后点击，一视同仁；同一行内的移动永不算跳转；重复点击已在名字上的符号不算自调用，但从体内调用点跳到自己头上是递归；
+  - 候选边须经**单次 definition provider 验证**才入图（drill-in 验出发词的定义确在落点符号；ref-jump 验落点词的定义确在刚读符号）——跳转刚用过 provider、缓存是热的，毫秒级。验证失败静默丢弃，宁缺毋滥。其余一切跳转（Ctrl+Tab、搜索结果、面包屑……）全部忽略；召回缺口由 `Pin Current Function to Trail` 显式命令兜底（并自动聚焦视图）。
+  - **出发点在快手势下不会 settle**（2026-07-14 实测教训）：Cmd+Click、"点击调用词后立刻 F12"都在防抖窗口内连发两个 selection 事件，出发点的 settle 被防抖吞掉或被管线令牌作废——settled-pair 分类天生看不见它。两层修复：① settled 状态即使被管线作废也照喂 trail（对渲染是过期数据，对 trail 恰是出发点）；② trail 自持一条**原始光标轨迹**（每个 selection 事件同步记 uri/行/词，零查询，16 条环），settled 分类无果时回退：落地在符号名上 + 轨迹中最后一个不同行状态（3s 窗口内）的词等于该名 → 补解析出发点的 enclosing symbol（其文档必然还开着）→ 同样的 definition 验证 → 入图。ref-jump 不需要此回退：找引用的出发点是驻留状态（peek 打开与浏览的时间远超防抖），天然已 settle。
+- **激活与生命周期**：
+  - **仅视图可见时记录**（entriesView 的 watching 门控同款）；录制中 ⇔ 面板可见，面板即状态指示器，不设状态栏图标。
+  - 规则的不可见靠两层消解：① `viewsWelcome` 空态文案在"打开面板发现是空的"这个惊奇现场解释规则；② 隐藏期只把 settled 状态推入**小环形缓冲**（12 条 / 3 分钟窗口，管线现成数据、零查询），视图打开时回放缓冲——"刚才那几跳"当场显形，也顺带桥接 visible 在切侧栏时的闪断。
+  - 标题栏 ⏸/▶（context key `sightread.trailPaused`）与 🗑 清空；右键单删节点（连带只有它能到达的子孙；共享的、被 pin 的幸存）。
+  - **纯内存、不持久化**（原则 2：标注是短命的），杜绝历史堆积；300 节点兜底上限，按**整树最近访问时间**驱逐、永不动最活跃的树。
+- **重要性显示，无任何行为计数**——visitCount 被否决：settle 计数度量的是光标抖动习惯而非重要性，dwell time 同罪（午饭问题）。替代为两个无噪声来源：
+  - 客观 = 图拓扑：发现入度 ≥2 的节点 description 显示 `↗ n callers`（跳转是刻意动作，抖动伪造不出边）；出度与探索深度由子树形状自然可见；
+  - 主观 = 荧光笔联动：函数体内有 marker 的节点 label 染 marker 色（FileDecorationProvider，自定义 scheme `sightread-trail`，与 Segments 视图同构）——重要性由人判断、由图定位；不另设 pin/star 判断通道（语义正交：判断属于荧光笔）。
+- **显示通道分配**（2026-07-14）：label = 从属 + 名字——方法显示为 `ClassName.method`（containerName 本就在节点身份 key 里，只是补上显示；嵌套函数显示为 `outer.inner`，同为真实从属）。从属是主要阅读信息（"当前函数调用了哪些**类**的方法"），占主通道且参与树的 type-to-filter。description 只留结构徽标（↻ 递归 / ↗ n callers），**不显示文件名**——位置是点击随手可达的信息，降级到 tooltip（`相对路径:行号` + called at line N）。label = 身份与从属、description = 图拓扑、tooltip = 位置，与通道独占原则同构。
+- 光标 settle 在已有节点内 → touch + `reveal({select, focus:false})` 跟随；根排序按创建序倒序（新树在上），刻意**不**按访问时间排——阅读中实时重排会晃。
+- 编辑漂移：节点 key 不含行号（uri + 容器名 + 名字），range 信息每次到访自愈；跨文件跳转落点符号未就绪（LS 冷启动）给 600ms 宽限再解析一次，仍无则按模块语义处理。
+- v2 预留：右键节点按需 call-hierarchy 扩展（机器补的边用暗色区别于亲脚走过的边）；与 Entry Points 联动（从入口开始读时自动种根）。
 
 ## 四、架构
 
@@ -123,6 +150,8 @@ src/
     focus.ts          焦点集合计算、行区间代数（merge/subtract/contain）
     enclosing.ts      "当前函数"选择（显式命令取最内层 vs 聚光灯的头行让位）
     entries.ts        入口点分类（引用位置 + 语言语法提示）
+    trail.ts          阅读轨迹图模型（节点/边/树投影/环覆盖/删除与驱逐）
+    jumpClassify.ts   结构跳转分类（drill-in / ref-jump 的语义签名识别）
   vs/              平台层
     compositor.ts     唯一渲染出口：装饰类型注册 + 图层/模式合成
     symbols.ts        函数查找（executeDocumentSymbolProvider，两种语义见 core/enclosing）
@@ -134,13 +163,14 @@ src/
     segmentsView.ts   Segments 树视图（光标联动 + 亮暗镜像）+ Go to Segment
     markersView.ts    Markers 树视图（按文件分组，快捷涂色/删除）
     entriesView.ts    Entry Points 树视图 + gutter 图标 + Go to Entry Point
+    trailView.ts      Trail 树视图（记录器 + LSP 验证 + 可见性门控 + 回放缓冲）
     palette.ts        荧光笔调色板与 gutter/树图标生成
   extension.ts     事件接线：统一的光标管线（防抖 + 过期令牌），文档变更分发
 ```
 
-统一光标管线：`selection 变化 → 找函数 → 算 tint → 算段落 → 算焦点 → compositor.render`。中途文档/光标再变则丢弃（令牌失效）。
+统一光标管线：`selection 变化 → 找函数 → 喂 trail/各视图 reveal → 算 tint → 算段落 → 算焦点 → compositor.render`。中途文档/光标再变则丢弃（令牌失效）。settled 状态是唯一数据源：trail 记录器与 Entry Points / Markers / Segments 三个视图的光标跟随都消费它。
 
-存储只有一个：荧光笔库（workspaceState）。段落是带缓存的现算，变量染色和折叠零存储。
+存储只有一个：荧光笔库（workspaceState）。段落是带缓存的现算，变量染色和折叠零存储，阅读轨迹纯内存（关窗即弃）。
 
 ## 五、已知风险与待实证项
 
