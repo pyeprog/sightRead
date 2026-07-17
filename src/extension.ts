@@ -25,13 +25,13 @@ const REFRESH_DEBOUNCE_MS = 120;
 
 /** One QuickPick row per spotlight level, in order of increasing focus. */
 const SPOTLIGHT_PICK_ITEMS: { level: SpotlightLevel; label: string; description: string }[] = [
-  { level: 0, label: 'Off', description: 'No dimming' },
-  { level: 1, label: 'Function', description: 'Dim everything outside the current function' },
-  { level: 2, label: 'Segment', description: 'Also dim unrelated segments inside the function' },
+  { level: 0, label: 'Off', description: 'no dimming' },
+  { level: 1, label: 'Function', description: 'current function stays lit' },
+  { level: 2, label: 'Segment', description: 'only the cursor block stays lit' },
   {
     level: 3,
-    label: 'Segment + Variables',
-    description: 'Segment focus, plus segments touched by the variable under the cursor stay lit',
+    label: 'Segment + Variables (recommended)',
+    description: 'cursor block + related blocks stay lit',
   },
 ];
 
