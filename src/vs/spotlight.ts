@@ -31,13 +31,8 @@ export class SpotlightController {
     return this.level;
   }
 
-  /** Off → Seg+Var → Seg → Fn → Off: the most detailed mode comes first. */
-  cycle(): void {
-    this.level = (((this.level as number) + 3) % 4) as SpotlightLevel;
-  }
-
-  off(): void {
-    this.level = 0;
+  setLevel(level: SpotlightLevel): void {
+    this.level = level;
   }
 
   compute(

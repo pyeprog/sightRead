@@ -22,7 +22,7 @@ export interface LineRange {
 
 export type SpotlightLevel = 0 | 1 | 2 | 3;
 
-export const SPOTLIGHT_LEVEL_NAMES = ['Off', 'Fn', 'Seg', 'Seg+Var'] as const;
+export const SPOTLIGHT_LEVEL_NAMES = ['Off', 'Function', 'Segment', 'Segment+Var'] as const;
 
 export interface FocusTiers {
   /** fully lit ranges */

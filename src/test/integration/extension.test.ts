@@ -49,8 +49,11 @@ suite('SightRead integration', () => {
       'sightread.removeMarkersInFunction',
       'sightread.removeMarkersInFile',
       'sightread.removeAllMarkers',
-      'sightread.spotlightCycle',
+      'sightread.spotlightSelect',
       'sightread.spotlightOff',
+      'sightread.spotlightFunction',
+      'sightread.spotlightSegment',
+      'sightread.spotlightSegmentVar',
       'sightread.toggleVariableTint',
       'sightread.goToSegment',
       'sightread.goToEntry',
@@ -296,10 +299,7 @@ suite('SightRead integration', () => {
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(1, 8, 1, 8); // inside alpha()
 
-    await vscode.commands.executeCommand('sightread.spotlightOff');
-    // cycle order is Off → Seg+Var → Seg → Fn
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 3: Seg+Var
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 2: Seg
+    await vscode.commands.executeCommand('sightread.spotlightSegment'); // level 2
 
     // the JS language service may need a while to warm up — poll
     let spot2;
@@ -323,7 +323,7 @@ suite('SightRead integration', () => {
       `cursor line 1 should be lit at level 2, got ${litText}`,
     );
 
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // level 1: Fn
+    await vscode.commands.executeCommand('sightread.spotlightFunction'); // level 1
     await sleep(500);
     const spot1 = api._test.compositor.getTransient(doc.uri)?.spotlight;
     assert.ok(spot1, 'level-1 spotlight state missing');
@@ -362,8 +362,7 @@ suite('SightRead integration', () => {
       done: (spot: SpotlightRender) => boolean,
     ): Promise<SpotlightRender | undefined> {
       const col = doc.lineAt(line).text.indexOf(word) + 1;
-      await vscode.commands.executeCommand('sightread.spotlightOff');
-      await vscode.commands.executeCommand('sightread.spotlightCycle'); // Off → Seg+Var
+      await vscode.commands.executeCommand('sightread.spotlightSegmentVar'); // level 3
       let spot;
       for (let i = 0; i < 100; i++) {
         editor.selection = new vscode.Selection(line, col, line, col);
@@ -511,9 +510,7 @@ suite('SightRead integration', () => {
     // reveal only runs while the view is visible
     await vscode.commands.executeCommand('sightread.segmentsView.focus');
 
-    await vscode.commands.executeCommand('sightread.spotlightOff');
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // Seg+Var
-    await vscode.commands.executeCommand('sightread.spotlightCycle'); // Seg
+    await vscode.commands.executeCommand('sightread.spotlightSegment'); // level 2
 
     // cursor inside the if-body — poll until the pipeline selects its segment
     // (the JS language service needs to warm up; alternate lines to refire events)
@@ -881,15 +878,19 @@ suite('SightRead integration', () => {
     trail.clear();
   });
 
-  test('spotlight cycles through levels without error', async () => {
+  test('spotlight switches through every level without error', async () => {
     await getApi();
     const doc = await vscode.workspace.openTextDocument({
       content: 'function f() {\n  const a = 1;\n\n  return a;\n}\n',
       language: 'javascript',
     });
     await vscode.window.showTextDocument(doc);
-    for (let i = 0; i < 4; i++) {
-      await vscode.commands.executeCommand('sightread.spotlightCycle');
+    for (const command of [
+      'sightread.spotlightSegmentVar',
+      'sightread.spotlightSegment',
+      'sightread.spotlightFunction',
+    ]) {
+      await vscode.commands.executeCommand(command);
       await sleep(200);
     }
     await vscode.commands.executeCommand('sightread.spotlightOff');

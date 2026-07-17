@@ -19,9 +19,21 @@ import { SpotlightController } from './vs/spotlight';
 import { TrailViewFeature, registerTrailCommands } from './vs/trailView';
 import { computeTint } from './vs/variableTint';
 import { findEnclosingFunctions } from './vs/symbols';
-import { SPOTLIGHT_LEVEL_NAMES } from './core/focus';
+import { SPOTLIGHT_LEVEL_NAMES, SpotlightLevel } from './core/focus';
 
 const REFRESH_DEBOUNCE_MS = 120;
+
+/** One QuickPick row per spotlight level, in order of increasing focus. */
+const SPOTLIGHT_PICK_ITEMS: { level: SpotlightLevel; label: string; description: string }[] = [
+  { level: 0, label: 'Off', description: 'No dimming' },
+  { level: 1, label: 'Function', description: 'Dim everything outside the current function' },
+  { level: 2, label: 'Segment', description: 'Also dim unrelated segments inside the function' },
+  {
+    level: 3,
+    label: 'Segment + Variables',
+    description: 'Segment focus, plus segments touched by the variable under the cursor stay lit',
+  },
+];
 
 export function activate(context: vscode.ExtensionContext): unknown {
   const repo = new MarkerRepository(context.workspaceState);
@@ -39,8 +51,8 @@ export function activate(context: vscode.ExtensionContext): unknown {
     100,
   );
   spotlightStatus.name = 'SightRead Spotlight';
-  spotlightStatus.command = 'sightread.spotlightCycle';
-  spotlightStatus.tooltip = 'SightRead spotlight — click to cycle (Off → Seg+Var → Seg → Fn)';
+  spotlightStatus.command = 'sightread.spotlightSelect';
+  spotlightStatus.tooltip = 'SightRead spotlight — click to choose a level';
   context.subscriptions.push(spotlightStatus);
   const syncSpotlightUi = (): void => {
     const level = spotlight.currentLevel;
@@ -131,17 +143,31 @@ export function activate(context: vscode.ExtensionContext): unknown {
   registerSegmentFoldCommands(context);
   registerEntryCommands(context, entriesView);
   registerTrailCommands(context, trailView);
+  const setSpotlight = (level: SpotlightLevel): void => {
+    spotlight.setLevel(level);
+    syncSpotlightUi();
+    scheduleRefresh();
+  };
   context.subscriptions.push(
-    vscode.commands.registerCommand('sightread.spotlightCycle', () => {
-      spotlight.cycle();
-      syncSpotlightUi();
-      scheduleRefresh();
+    vscode.commands.registerCommand('sightread.spotlightSelect', async () => {
+      const picked = await vscode.window.showQuickPick(
+        SPOTLIGHT_PICK_ITEMS.map((item) => ({
+          ...item,
+          description:
+            item.level === spotlight.currentLevel
+              ? `${item.description} — current`
+              : item.description,
+        })),
+        { title: 'Spotlight Level', placeHolder: 'What stays lit — everything else is dimmed' },
+      );
+      if (picked) {
+        setSpotlight(picked.level);
+      }
     }),
-    vscode.commands.registerCommand('sightread.spotlightOff', () => {
-      spotlight.off();
-      syncSpotlightUi();
-      scheduleRefresh();
-    }),
+    vscode.commands.registerCommand('sightread.spotlightOff', () => setSpotlight(0)),
+    vscode.commands.registerCommand('sightread.spotlightFunction', () => setSpotlight(1)),
+    vscode.commands.registerCommand('sightread.spotlightSegment', () => setSpotlight(2)),
+    vscode.commands.registerCommand('sightread.spotlightSegmentVar', () => setSpotlight(3)),
     vscode.commands.registerCommand('sightread.toggleVariableTint', async () => {
       const cfg = vscode.workspace.getConfiguration('sightread');
       const current = cfg.get('variableTint.enabled', true);

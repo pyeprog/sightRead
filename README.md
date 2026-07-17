@@ -51,10 +51,10 @@ Five orthogonal features, each providing a different kind of visual assistance (
 - 🦴 **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
 - 🖍️ **Highlighter (markers)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first, optionally with a short note saying what the block does.
 - 🎯 **Variable tint** — within the context of the enclosing function, outlines the symbol under the cursor, so you can see at a glance where this variable was created and where it is used.
-- 🔦 **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar to cycle Off → Seg+Var → Seg → Fn.
-  1. **Fn** — only the current function; other functions are dimmed
-  2. **Seg** — only the current block; other blocks are dimmed
-  3. **Seg+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
+- 🔦 **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar and pick a level.
+  1. **Function** — only the current function; other functions are dimmed
+  2. **Segment** — only the current block; other blocks are dimmed
+  3. **Segment+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
   4. **Off** — spotlight off, the default mode.
 - 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
 - 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
@@ -77,8 +77,11 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
 | `SightRead: Remove Markers in File` | clear markers in the current file |
 | `SightRead: Remove All Markers (Workspace)` | clear every marker in the workspace |
-| `SightRead: Cycle Spotlight Level` | Off → Seg+Var → Seg → Fn, same as clicking the 👁 status-bar item |
-| `SightRead: Spotlight Off` | jump straight back to Off |
+| `SightRead: Choose Spotlight Level…` | pick the level from a list, same as clicking the 👁 status-bar item |
+| `SightRead: Spotlight: Focus Current Function` | jump straight to the Function level |
+| `SightRead: Spotlight: Focus Current Segment` | jump straight to the Segment level |
+| `SightRead: Spotlight: Focus Segment + Variable Uses` | jump straight to the Segment+Var level |
+| `SightRead: Spotlight: Off` | turn the spotlight off |
 | `SightRead: Toggle Variable Tint` | turn occurrence outlining on or off |
 | `SightRead: Go to Segment…` | QuickPick over the current function's segments |
 | `SightRead: Go to Entry Point…` | QuickPick over the file's entry points |
