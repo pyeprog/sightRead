@@ -1,15 +1,25 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   EnclosingCandidate,
   chooseEnclosingFunction,
   chooseInnermostFunction,
+  chooseInterpretUnit,
   chooseOutermostFunction,
 } from '../core/enclosing';
+import { InterpretUnit } from '../core/guide';
 
 const FUNCTION_KINDS = new Set<vscode.SymbolKind>([
   vscode.SymbolKind.Function,
   vscode.SymbolKind.Method,
   vscode.SymbolKind.Constructor,
+]);
+
+const CLASS_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Class,
+  vscode.SymbolKind.Interface,
+  vscode.SymbolKind.Struct,
+  vscode.SymbolKind.Enum,
 ]);
 
 export interface FunctionInfo {
@@ -21,6 +31,8 @@ interface Candidate extends EnclosingCandidate {
   name: string;
   range: vscode.Range;
   kind: vscode.SymbolKind;
+  /** reported as a class-like symbol (Class/Interface/Struct/Enum) */
+  classKind: boolean;
   /** range of the symbol's own name; absent for SymbolInformation providers */
   selectionRange?: vscode.Range;
   containerName?: string;
@@ -44,11 +56,12 @@ export interface EnclosingFunctions {
   at?: SymbolAtCursor;
 }
 
-/** Multi-line symbols whose line span contains `pos` (line-based, so the
- *  header's indentation and the closing brace's tail count as inside). */
+/** Multi-line symbols whose line span contains [`pos`, `endPos`] (line-based,
+ *  so the header's indentation and the closing brace's tail count as inside). */
 async function collectContaining(
   doc: vscode.TextDocument,
   pos: vscode.Position,
+  endPos: vscode.Position = pos,
 ): Promise<Candidate[]> {
   let roots: (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined;
   try {
@@ -65,7 +78,7 @@ async function collectContaining(
     container?: string,
   ): void => {
     const range = 'location' in s ? s.location.range : s.range;
-    if (pos.line < range.start.line || pos.line > range.end.line) {
+    if (pos.line < range.start.line || endPos.line > range.end.line) {
       return;
     }
     if (range.end.line - range.start.line >= 1) {
@@ -73,6 +86,7 @@ async function collectContaining(
         startLine: range.start.line,
         endLine: range.end.line,
         fnKind: FUNCTION_KINDS.has(s.kind),
+        classKind: CLASS_KINDS.has(s.kind),
         name: s.name,
         range,
         kind: s.kind,
@@ -135,4 +149,35 @@ export async function findFunctionAtCursor(
   pos: vscode.Position,
 ): Promise<FunctionInfo | undefined> {
   return info(chooseInnermostFunction(await collectContaining(doc, pos)));
+}
+
+export interface InterpretTarget {
+  unit: InterpretUnit;
+  /** function name, class name, or file basename for the file unit */
+  name: string;
+  /** the whole document for the file unit */
+  range: vscode.Range;
+}
+
+/**
+ * What "Interpret Current" points at. With no selection the cursor decides
+ * (innermost function → enclosing class → file); with a selection the
+ * candidates are narrowed to symbols containing the whole selection, so
+ * selecting a class definition interprets the class and a multi-symbol
+ * selection falls through to the file.
+ */
+export async function resolveInterpretTarget(
+  doc: vscode.TextDocument,
+  selection: vscode.Selection,
+): Promise<InterpretTarget> {
+  const containing = await collectContaining(doc, selection.start, selection.end);
+  const chosen = chooseInterpretUnit(containing);
+  if (chosen) {
+    return { unit: chosen.unit, name: chosen.candidate.name, range: chosen.candidate.range };
+  }
+  return {
+    unit: 'file',
+    name: path.basename(doc.uri.fsPath),
+    range: new vscode.Range(0, 0, doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length),
+  };
 }

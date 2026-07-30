@@ -89,3 +89,30 @@ export function chooseOutermostFunction<T extends EnclosingCandidate>(
 ): T | undefined {
   return widest(containing.filter((c) => c.fnKind)) ?? widest(containing);
 }
+
+export interface UnitCandidate extends EnclosingCandidate {
+  /** reported as a class-like symbol (Class/Interface/Struct/Enum) */
+  classKind: boolean;
+}
+
+/**
+ * The interpret-unit decision: innermost function symbol → function; else
+ * innermost class-like symbol → class; else any innermost multi-line symbol
+ * → function (arrow functions surface as Variable/Property, and single-line
+ * symbols never reach `containing`); nothing containing → undefined, which
+ * the caller reads as the file unit.
+ */
+export function chooseInterpretUnit<T extends UnitCandidate>(
+  containing: T[],
+): { unit: 'function' | 'class'; candidate: T } | undefined {
+  const fn = innermost(containing.filter((c) => c.fnKind));
+  if (fn) {
+    return { unit: 'function', candidate: fn };
+  }
+  const cls = innermost(containing.filter((c) => c.classKind));
+  if (cls) {
+    return { unit: 'class', candidate: cls };
+  }
+  const other = innermost(containing);
+  return other ? { unit: 'function', candidate: other } : undefined;
+}

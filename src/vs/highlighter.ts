@@ -10,9 +10,8 @@ import {
   removeInLineRange,
 } from '../core/markers';
 import { Compositor } from './compositor';
+import { ItemRepository, newId } from './itemRepository';
 import { findFunctionAtCursor } from './symbols';
-
-const STORAGE_KEY = 'sightread.markers';
 
 const COLOR_LABELS: Record<MarkerColor, string> = {
   yellow: '🟡 Yellow',
@@ -46,45 +45,16 @@ export async function promptMarkerNote(): Promise<string | undefined> {
   return note || undefined;
 }
 
-let idCounter = 0;
-function newId(): string {
-  return `${Date.now().toString(36)}-${idCounter++}`;
+export class MarkerRepository extends ItemRepository<Marker> {
+  constructor(memento: vscode.Memento) {
+    super(memento, 'sightread.markers');
+  }
 }
 
-/** Markers persisted in workspaceState — deliberately not in the repo (design.md §一.2). */
-export class MarkerRepository {
-  private byUri: Record<string, Marker[]>;
-  private emitter = new vscode.EventEmitter<void>();
-  /** fires after any mutation — list views subscribe to this */
-  readonly onDidChange = this.emitter.event;
-
-  constructor(private memento: vscode.Memento) {
-    this.byUri = { ...memento.get<Record<string, Marker[]>>(STORAGE_KEY, {}) };
-  }
-
-  get(uri: vscode.Uri): Marker[] {
-    return this.byUri[uri.toString()] ?? [];
-  }
-
-  uris(): string[] {
-    return Object.keys(this.byUri);
-  }
-
-  set(uri: vscode.Uri, markers: Marker[]): void {
-    if (markers.length > 0) {
-      this.byUri[uri.toString()] = markers;
-    } else {
-      delete this.byUri[uri.toString()];
-    }
-    void this.memento.update(STORAGE_KEY, this.byUri);
-    this.emitter.fire();
-  }
-
-  clearAll(): void {
-    this.byUri = {};
-    void this.memento.update(STORAGE_KEY, this.byUri);
-    this.emitter.fire();
-  }
+/** Trimmed, truncated first-line snapshot shown in list views. */
+export function linePreview(doc: vscode.TextDocument, line: number): string | undefined {
+  const text = doc.lineAt(Math.min(line, doc.lineCount - 1)).text.trim();
+  return text.length > 50 ? text.slice(0, 49) + '…' : text || undefined;
 }
 
 function selectionLineRange(editor: vscode.TextEditor): { start: number; end: number } {
@@ -109,9 +79,7 @@ export function addLineMarker(
 ): void {
   const start = Math.min(startLine, doc.lineCount - 1);
   const end = Math.min(endLine, doc.lineCount - 1);
-  const firstLine = doc.lineAt(start).text.trim();
-  const preview =
-    firstLine.length > 50 ? firstLine.slice(0, 49) + '…' : firstLine || undefined;
+  const preview = linePreview(doc, start);
   const marker: Marker = { id: newId(), color, note, preview, startLine: start, endLine: end };
   const { markers } = insertMarker(repo.get(doc.uri), marker);
   repo.set(doc.uri, markers);
@@ -261,7 +229,7 @@ export function handleDocumentChange(
   }));
   const result = applyChanges(before, changes);
   if (result.changed) {
-    repo.set(e.document.uri, result.markers);
+    repo.set(e.document.uri, result.items);
     compositor.renderVisibleFor(e.document.uri);
   }
 }

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { invalidateHarnessCache } from './vs/agentCli';
 import { Compositor } from './vs/compositor';
 import {
   MarkerRepository,
@@ -6,6 +7,11 @@ import {
   registerHighlighterCommands,
 } from './vs/highlighter';
 import { EntriesViewFeature, registerEntryCommands } from './vs/entriesView';
+import {
+  GuideFeature,
+  GuideRepository,
+  handleGuideDocumentChange,
+} from './vs/guideFeature';
 import { MarkersViewFeature } from './vs/markersView';
 import { SegmentCache } from './vs/segmentCache';
 import {
@@ -37,14 +43,26 @@ const SPOTLIGHT_PICK_ITEMS: { level: SpotlightLevel; label: string; description:
 
 export function activate(context: vscode.ExtensionContext): unknown {
   const repo = new MarkerRepository(context.workspaceState);
+  const guideRepo = new GuideRepository(context.workspaceState);
   const segmentCache = new SegmentCache();
-  const compositor = new Compositor((uri) => repo.get(uri));
+  const compositor = new Compositor(
+    (uri) => repo.get(uri),
+    (uri) => guideRepo.get(uri),
+  );
   const spotlight = new SpotlightController();
-  const markersView = new MarkersViewFeature(repo, compositor);
+  const markersView = new MarkersViewFeature(repo, guideRepo, compositor);
   const segmentsView = new SegmentsViewFeature(repo);
   const entriesView = new EntriesViewFeature();
   const trailView = new TrailViewFeature(repo);
-  context.subscriptions.push(compositor, markersView, segmentsView, entriesView, trailView);
+  const guideFeature = new GuideFeature(guideRepo, compositor);
+  context.subscriptions.push(
+    compositor,
+    markersView,
+    segmentsView,
+    entriesView,
+    trailView,
+    guideFeature,
+  );
   const spotlightStatus = vscode.window.createStatusBarItem(
     'sightread.spotlight',
     vscode.StatusBarAlignment.Right,
@@ -206,6 +224,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     }),
     vscode.workspace.onDidChangeTextDocument((e) => {
       handleDocumentChange(e, repo, compositor);
+      handleGuideDocumentChange(e, guideRepo, compositor);
       const active = vscode.window.activeTextEditor;
       if (active && active.document.uri.toString() === e.document.uri.toString()) {
         scheduleRefresh(active);
@@ -213,6 +232,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('sightread')) {
+        invalidateHarnessCache();
         compositor.refreshDimTypes();
         compositor.renderVisible();
         scheduleRefresh();
@@ -228,6 +248,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   return {
     _test: {
       repo,
+      guideRepo,
       segmentCache,
       compositor,
       spotlight,

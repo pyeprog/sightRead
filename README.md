@@ -34,10 +34,15 @@ To be fair, reading or not reading the code is often not really a question — m
 This extension offers some visual assistance to those who still want to read code, hoping it helps you read faster and smoother.
 
 Humans are no longer the main producers of code — machines are. Reading code, understanding it and making decisions is today's bottleneck. Facing a wall of code, an LLM can lay out the big structure and framework for you, but it cannot do the close reading for you (reading the detailed code costs the same as reading the LLM's summary of it).
-SightRead goes the opposite way: no LLM required, it strengthens the *human* ability to read itself, draping a layer of visual aids over your code (toggleable at any time) — so that, like a musician sight-reading a score, the logical picture surfaces the moment you see the code.
+SightRead strengthens the *human* ability to read itself, draping a layer of visual aids over your code (toggleable at any time) — so that, like a musician sight-reading a score, the logical picture surfaces the moment you see the code.
+And in v1.4.0 I made a decision that betrays this very creed: AI-assisted reading is in. But it is not one of those revolting things that chew the code up and feed it into your mouth — it only, with restraint, tells you what deserves a close read and what you can let go. The core is still: **you** understand the code.
 
 <p align="center">
-  <img src="./media/solennelle.webp" alt="solennelle">
+  <img src="./media/brain.gif" alt="solennelle">
+</p>
+
+<p align="center">
+  <img src="./media/ai-guidance.webp" alt="solennelle">
 </p>
 
 ## ✨ Features
@@ -46,7 +51,7 @@ SightRead goes the opposite way: no LLM required, it strengthens the *human* abi
   <img src="./media/demo.webp" alt="demo">
 </p>
 
-Five orthogonal features, each providing a different kind of visual assistance (see design.md §2):
+Orthogonal features, each providing a different kind of visual assistance (see design.md §2):
 
 - 🦴 **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
 - 🖍️ **Highlighter (markers)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first, optionally with a short note saying what the block does.
@@ -59,7 +64,8 @@ Five orthogonal features, each providing a different kind of visual assistance (
 - 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
 - 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
 - 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan, no LLM — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site, functions reached from several callers get a `↗ n callers` badge, and nodes whose body carries a highlighter marker are tinted in the marker's color. The trail lives in memory only and is discarded when the window closes.
-- 🗂️ **Sidebar** — the SightRead activity-bar container holds four views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree), **Markers** (all highlighter marks in the workspace) and **Trail** (the call structure you have walked). All four follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
+- 🤖 **AI-assisted reading** — this feature hides inside the highlighter, and it is the extension's only optional AI feature. Its design philosophy: signposts only, never a translation of the code. Run `SightRead: Interpret Current (AI)` and the code at the cursor — a function, a class, or the whole file — gets annotated **in place** as role-colored steps: where the main body is, what is setup / fallback / special-case handling, and *why* each core entity exists. It drives a coding-agent CLI (`claude` (Claude Code), `codex` (Codex CLI), `opencode`, `pi`, `cursor-agent`, `aider`, `agy` — auto-detected, custom commands configurable), headless; you log in or configure an API key yourself beforehand. The results hang under the Markers view.
+- 🗂️ **Sidebar** — the SightRead activity-bar container holds four views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree), **Markers** (all highlighter marks and AI guides in the workspace) and **Trail** (the call structure you have walked). All four follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
 
 ## ⌨️ Commands
 
@@ -77,6 +83,8 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
 | `SightRead: Remove Markers in File` | clear markers in the current file |
 | `SightRead: Remove All Markers (Workspace)` | clear every marker in the workspace |
+| `SightRead: Interpret Current (AI)` | AI-annotate the function / class / file at the cursor with role-tagged signposts |
+| `SightRead: Guide: Next Step` / `Guide: Previous Step` | jump between the steps of the guide in the current file |
 | `SightRead: Choose Spotlight Level…` | pick the level from a list, same as clicking the 👁 status-bar item |
 | `SightRead: Spotlight: Focus Current Function` | jump straight to the Function level |
 | `SightRead: Spotlight: Focus Current Segment` | jump straight to the Segment level |
@@ -105,6 +113,10 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `sightread.entries.iconColor` | `#8C8C8C` | chevron color; suspected entries use it at reduced opacity |
 | `sightread.marker.favoriteColor` | `yellow` | color used by `Mark Selection (Favorite Color)` |
 | `sightread.marker.notePosition` | `lineEnd` | marker note at line start or line end |
+| `sightread.guide.harness` | `auto` | which coding-agent CLI runs AI Interpret; `auto` probes `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` |
+| `sightread.guide.customHarnesses` | `{}` | add your own harness profiles, or replace builtin ones by name |
+| `sightread.guide.language` | *(empty)* | language of AI notes and summaries; empty = English |
+| `sightread.guide.promptTemplate.function` / `.class` / `.file` | *(empty)* | custom reading instructions per interpret unit; the JSON output contract is always appended by SightRead |
 
 ## 🛠️ Development
 

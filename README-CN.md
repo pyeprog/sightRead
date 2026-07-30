@@ -34,10 +34,16 @@ Idea is cheap, code is even cheaper these days. AI is your tool, not your master
 而这个插件，给那些仍旧想要阅读代码的人提供一些视觉上的辅助，希望它能帮你读得更快，读得更顺。
 
 现在人类不是代码生产的大头，机器才是。阅读代码理解并做决策是当下的瓶颈。当海量代码放在你眼前，LLM能帮你梳理大结构和框架，但不能帮你细读（读细节代码和读LLM给的summary，成本相同）。
-SightRead走相反的方向，无需LLM辅助，强化“人的阅读能力“本身，在你的代码上附上一层视觉辅助（可随时开关），让你像音乐家一样，看到code，逻辑图景就能自然浮现。
+SightRead强化“人的阅读能力“本身，在你的代码上附上一层视觉辅助（可随时开关），让你像音乐家一样，看到code，逻辑图景就能自然浮现。
+而在v1.4.0之后，我做了一个违背祖宗的决定，增加了AI辅助阅读。但它不是那种把代码嚼碎了喂给你的恶心玩意儿，它只是克制的告诉你哪里该读一读，哪里可以放掉。整个核心仍旧是：“你 理解 代码”。
+
 
 <p align="center">
-  <img src="./media/solennelle.webp" alt="solennelle">
+  <img src="./media/brain.gif" alt="solennelle">
+</p>
+
+<p align="center">
+  <img src="./media/ai-guidance.webp" alt="solennelle">
 </p>
 
 ## ✨ 功能
@@ -46,7 +52,7 @@ SightRead走相反的方向，无需LLM辅助，强化“人的阅读能力“�
   <img src="./media/demo.webp" alt="demo">
 </p>
 
-五个正交的功能，各自提供不同的视觉辅助（见 design.md §2）：
+一组正交的功能，各自提供不同的视觉辅助（见 design.md §2）：
 
 - 🦴 **骨架折叠** —— 快速折叠与展开函数内已有的代码块。读函数时，可以先折叠看函数的大结构，对感兴趣的代码块再展开仔细阅读。
 - 🖍️ **荧光笔（标记）** —— 对于一些难读的、 tricky的代码块，可以先用荧光笔打个标记，也可以在这个标记上写下一个简短的note，标注它是干啥的。
@@ -59,7 +65,8 @@ SightRead走相反的方向，无需LLM辅助，强化“人的阅读能力“�
 - 🧩 **自动分代码块** —— 按空行 + 关键词把函数切成**递归结构**，方便在segment窗口展示函数大结构，点击可以跳转到相应代码块。节点旁还会以灰色小字显示压缩后的条件/表达式（悬停可看完整首行）。Segments 面板会跟随光标：光标所在的段自动选中；聚光灯开启时，无关的段在面板里也会像编辑器里一样压暗。
 - 🚪 **入口点** —— 侧边栏视图，列出一个文件的控制流可以从外部进入的所有"入口"，让你从入口开始顺着引用往下读，而不是从第一行开始读。每个顶层符号按引用位置分类：被其他文件引用 → 入口；只在文件内被引用 → 隐藏；找不到任何引用 → 弱化显示的"疑似"入口（`activate` 这类框架钩子、路由 handler——或者死代码）。编辑器 gutter 里以雪佛龙（»）标出入口行。
 - 🧭 **Trail（阅读轨迹）** —— 侧边栏视图，在它打开期间把你的跳转变成调用结构图：跳到定义，被调函数出现在出发函数之下；跳到引用，调用方成为父节点。不做全项目扫描、不用 LLM——只记录你真实走过的结构性跳转（每一条都经 definition provider 验证），结构随阅读自然显现。子节点按调用位置排序，被多个调用方走到的函数带 `↗ n callers` 徽标，函数体内有荧光笔标记的节点以标记色染色。轨迹只存在于内存中，关窗即弃。
-- 🗂️ **侧边栏** —— SightRead 活动栏容器包含四个视图：**Entry Points**（从哪里开始读这个文件）、**Segments**（当前函数的段落树）、**Markers**（工作区内所有荧光标记）和 **Trail**（你走过的调用结构）。四个视图都会跟随光标。它们合在一起天然覆盖了 Outline 的功能——比起 Outline 不加筛选地列举所有 symbol，SightRead 能更好地向你展示当前阅读代码的真正结构。
+- 🤖 **AI 辅助阅读** —— 这个功能藏在荧光笔里，是整个插件唯一的可选 AI 功能。它的设计哲学是只给你路标，不翻译代码。运行 `SightRead: Interpret Current (AI)`，光标处的代码——函数、类、整个文件——被**就地**标注为按角色着色的步骤：主体在哪里，哪些是准备/兜底/特例处理，每个核心实体*为什么*存在。它调用 coding-agent CLI（`claude`(claude code)、`codex`(codex cli)、`opencode`、`pi`、`cursor-agent`、`aider`、`agy`——自动探测，可配置自定义命令），headless 运行，需要你自己事先登录或配置API key。解读结果挂在 Markers 视图的下。
+- 🗂️ **侧边栏** —— SightRead 活动栏容器包含四个视图：**Entry Points**（从哪里开始读这个文件）、**Segments**（当前函数的段落树）、**Markers**（工作区内所有荧光标记与 AI 解读）和 **Trail**（你走过的调用结构）。四个视图都会跟随光标。它们合在一起天然覆盖了 Outline 的功能——比起 Outline 不加筛选地列举所有 symbol，SightRead 能更好地向你展示当前阅读代码的真正结构。
 
 
 ## ⌨️ 命令
@@ -78,6 +85,8 @@ SightRead走相反的方向，无需LLM辅助，强化“人的阅读能力“�
 | `SightRead: Remove Markers in Current Function` | 清除当前函数内的标记 |
 | `SightRead: Remove Markers in File` | 清除当前文件内的标记 |
 | `SightRead: Remove All Markers (Workspace)` | 清除工作区内的全部标记 |
+| `SightRead: Interpret Current (AI)` | AI 就地标注光标处的函数/类/文件，产出带角色的路标 |
+| `SightRead: Guide: Next Step` / `Guide: Previous Step` | 在当前文件解读的步骤间跳转 |
 | `SightRead: Choose Spotlight Level…` | 从列表选档位，等同点击状态栏的 👁 |
 | `SightRead: Spotlight: Focus Current Function` | 直接切到 Function 档 |
 | `SightRead: Spotlight: Focus Current Segment` | 直接切到 Segment 档 |
@@ -106,6 +115,10 @@ SightRead走相反的方向，无需LLM辅助，强化“人的阅读能力“�
 | `sightread.entries.iconColor` | `#8C8C8C` | 雪佛龙颜色；疑似入口以降低的透明度使用同色 |
 | `sightread.marker.favoriteColor` | `yellow` | `Mark Selection (Favorite Color)` 使用的颜色 |
 | `sightread.marker.notePosition` | `lineEnd` | 标记备注显示在行首还是行尾 |
+| `sightread.guide.harness` | `auto` | AI 解读驱动哪个 coding-agent CLI；`auto` 按 `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` 顺序探测 |
+| `sightread.guide.customHarnesses` | `{}` | 添加自建 harness 配置，或按名字覆盖内置的 |
+| `sightread.guide.language` | *(空)* | AI 备注与概述的语言；空 = 英语 |
+| `sightread.guide.promptTemplate.function` / `.class` / `.file` | *(空)* | 按解读单位自定义阅读指令；JSON 输出契约始终由 SightRead 追加 |
 
 ## 🛠️ 开发
 

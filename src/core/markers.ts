@@ -10,16 +10,20 @@ export type MarkerColor = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 
 export const MARKER_COLORS: MarkerColor[] = ['yellow', 'red', 'green', 'blue', 'purple'];
 
-export interface Marker {
+/** Anything occupying a whole-line range — markers, guides. */
+export interface LineSpan {
+  /** inclusive */
+  startLine: number;
+  /** inclusive */
+  endLine: number;
+}
+
+export interface Marker extends LineSpan {
   id: string;
   color: MarkerColor;
   note?: string;
   /** snapshot of the first marked line's text, for list views */
   preview?: string;
-  /** inclusive */
-  startLine: number;
-  /** inclusive */
-  endLine: number;
 }
 
 /** A single content change, in pre-change document coordinates. */
@@ -32,9 +36,9 @@ export interface EditChange {
   insertedNewlines: number;
 }
 
-export interface ApplyResult {
-  markers: Marker[];
-  removed: Marker[];
+export interface ApplyResult<T extends LineSpan> {
+  items: T[];
+  removed: T[];
   changed: boolean;
 }
 
@@ -42,50 +46,53 @@ function cmpPos(aLine: number, aChar: number, bLine: number, bChar: number): num
   return aLine !== bLine ? aLine - bLine : aChar - bChar;
 }
 
-export function applyChange(markers: Marker[], c: EditChange): ApplyResult {
-  const kept: Marker[] = [];
-  const removed: Marker[] = [];
+export function applyChange<T extends LineSpan>(items: T[], c: EditChange): ApplyResult<T> {
+  const kept: T[] = [];
+  const removed: T[] = [];
   let changed = false;
   const delta = c.insertedNewlines - (c.endLine - c.startLine);
-  for (const m of markers) {
-    // marker occupies [(startLine, 0), (endLine + 1, 0)) — whole lines
-    const changeBeforeMarker = cmpPos(c.endLine, c.endChar, m.startLine, 0) <= 0;
-    const changeAfterMarker = cmpPos(c.startLine, c.startChar, m.endLine + 1, 0) >= 0;
-    if (changeBeforeMarker) {
+  for (const m of items) {
+    // the item occupies [(startLine, 0), (endLine + 1, 0)) — whole lines
+    const changeBeforeItem = cmpPos(c.endLine, c.endChar, m.startLine, 0) <= 0;
+    const changeAfterItem = cmpPos(c.startLine, c.startChar, m.endLine + 1, 0) >= 0;
+    if (changeBeforeItem) {
       if (delta === 0) {
         kept.push(m);
       } else {
         kept.push({ ...m, startLine: m.startLine + delta, endLine: m.endLine + delta });
         changed = true;
       }
-    } else if (changeAfterMarker) {
+    } else if (changeAfterItem) {
       kept.push(m);
     } else {
       removed.push(m);
       changed = true;
     }
   }
-  return { markers: kept, removed, changed };
+  return { items: kept, removed, changed };
 }
 
 /** Applies multiple changes of one edit event, bottom-up. */
-export function applyChanges(markers: Marker[], changes: EditChange[]): ApplyResult {
+export function applyChanges<T extends LineSpan>(
+  items: T[],
+  changes: EditChange[],
+): ApplyResult<T> {
   const sorted = [...changes].sort(
     (a, b) => cmpPos(b.startLine, b.startChar, a.startLine, a.startChar),
   );
-  let current = markers;
-  const removed: Marker[] = [];
+  let current = items;
+  const removed: T[] = [];
   let changed = false;
   for (const c of sorted) {
     const r = applyChange(current, c);
-    current = r.markers;
+    current = r.items;
     removed.push(...r.removed);
     changed = changed || r.changed;
   }
-  return { markers: current, removed, changed };
+  return { items: current, removed, changed };
 }
 
-function intersectsLines(m: Marker, startLine: number, endLine: number): boolean {
+function intersectsLines(m: LineSpan, startLine: number, endLine: number): boolean {
   return m.startLine <= endLine && m.endLine >= startLine;
 }
 

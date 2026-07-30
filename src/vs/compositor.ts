@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import { LineRange, intersectsAny, subtractRanges } from '../core/focus';
+import { Guide } from '../core/guide';
 import { MARKER_COLORS, Marker, MarkerColor } from '../core/markers';
-import { PALETTE, gutterIcon } from './palette';
+import { GUIDE_RGB, GUIDE_ROLE_RGBS, PALETTE, guideRoleRgb, gutterIcon } from './palette';
+
+const STEP_BADGES = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+
+/** Reading-order badge for a 0-based step index. */
+function stepBadge(index: number): string {
+  return index < STEP_BADGES.length ? STEP_BADGES[index] : `(${index + 1})`;
+}
 
 export interface TintOccurrence {
   range: vscode.Range;
@@ -24,12 +32,15 @@ interface TransientState {
 /**
  * The single rendering coordinator (design.md §一.4): every decoration in the
  * extension flows through here. Owns all decoration types and composes the
- * persistent layer (markers) with the transient state (tint + spotlight),
- * including suppressing markers inside dimmed regions.
+ * persistent layer (markers + guides) with the transient state (tint +
+ * spotlight), including suppressing markers inside dimmed regions.
  */
 export class Compositor implements vscode.Disposable {
   private markerFull = new Map<MarkerColor, vscode.TextEditorDecorationType>();
   private markerDim = new Map<MarkerColor, vscode.TextEditorDecorationType>();
+  /** one pair per role accent, keyed by the "r, g, b" fragment */
+  private guideFull = new Map<string, vscode.TextEditorDecorationType>();
+  private guideDim = new Map<string, vscode.TextEditorDecorationType>();
   private noteType: vscode.TextEditorDecorationType;
   private tintRead: vscode.TextEditorDecorationType;
   private tintWrite: vscode.TextEditorDecorationType;
@@ -39,7 +50,10 @@ export class Compositor implements vscode.Disposable {
 
   private transient = new Map<string, TransientState>();
 
-  constructor(private getMarkers: (uri: vscode.Uri) => Marker[]) {
+  constructor(
+    private getMarkers: (uri: vscode.Uri) => Marker[],
+    private getGuides: (uri: vscode.Uri) => Guide[],
+  ) {
     for (const color of MARKER_COLORS) {
       const rgb = PALETTE[color];
       this.markerFull.set(
@@ -49,7 +63,7 @@ export class Compositor implements vscode.Disposable {
           backgroundColor: `rgba(${rgb}, 0.14)`,
           overviewRulerColor: `rgba(${rgb}, 0.7)`,
           overviewRulerLane: vscode.OverviewRulerLane.Center,
-          gutterIconPath: gutterIcon(color),
+          gutterIconPath: gutterIcon(rgb),
           gutterIconSize: 'contain',
         }),
       );
@@ -58,6 +72,28 @@ export class Compositor implements vscode.Disposable {
         vscode.window.createTextEditorDecorationType({
           isWholeLine: true,
           backgroundColor: `rgba(${rgb}, 0.04)`,
+          overviewRulerColor: `rgba(${rgb}, 0.25)`,
+          overviewRulerLane: vscode.OverviewRulerLane.Center,
+        }),
+      );
+    }
+    for (const rgb of GUIDE_ROLE_RGBS) {
+      this.guideFull.set(
+        rgb,
+        vscode.window.createTextEditorDecorationType({
+          isWholeLine: true,
+          backgroundColor: `rgba(${rgb}, 0.10)`,
+          overviewRulerColor: `rgba(${rgb}, 0.7)`,
+          overviewRulerLane: vscode.OverviewRulerLane.Center,
+          gutterIconPath: gutterIcon(rgb),
+          gutterIconSize: 'contain',
+        }),
+      );
+      this.guideDim.set(
+        rgb,
+        vscode.window.createTextEditorDecorationType({
+          isWholeLine: true,
+          backgroundColor: `rgba(${rgb}, 0.03)`,
           overviewRulerColor: `rgba(${rgb}, 0.25)`,
           overviewRulerLane: vscode.OverviewRulerLane.Center,
         }),
@@ -159,46 +195,83 @@ export class Compositor implements vscode.Disposable {
     }
 
     // markers: full style in lit regions, suppressed style inside dimmed ones
-    const isLit = (m: Marker): boolean =>
-      !spot || intersectsAny({ start: m.startLine, end: m.endLine }, spot.lit);
+    const isLit = (r: LineRange): boolean => !spot || intersectsAny(r, spot.lit);
     for (const color of MARKER_COLORS) {
       const full: vscode.Range[] = [];
       const dim: vscode.Range[] = [];
       for (const m of markers) {
         if (m.color === color) {
-          (isLit(m) ? full : dim).push(lineRangeOf({ start: m.startLine, end: m.endLine }));
+          const span = { start: m.startLine, end: m.endLine };
+          (isLit(span) ? full : dim).push(lineRangeOf(span));
         }
       }
       editor.setDecorations(this.markerFull.get(color)!, full);
       editor.setDecorations(this.markerDim.get(color)!, dim);
     }
 
-    // marker notes, at the start or end of the first marked line
+    // guide steps: one accent per role, under the same lit/dim rule
+    const guides = this.getGuides(doc.uri).filter((g) => g.startLine <= lastLine);
+    const stepFull = new Map<string, vscode.Range[]>();
+    const stepDim = new Map<string, vscode.Range[]>();
+    for (const g of guides) {
+      for (const s of g.steps) {
+        if (s.startLine > lastLine) {
+          continue;
+        }
+        const span = { start: s.startLine, end: Math.min(s.endLine, lastLine) };
+        const bucket = isLit(span) ? stepFull : stepDim;
+        const rgb = guideRoleRgb(s.role);
+        bucket.set(rgb, [...(bucket.get(rgb) ?? []), lineRangeOf(span)]);
+      }
+    }
+    for (const [rgb, type] of this.guideFull) {
+      editor.setDecorations(type, stepFull.get(rgb) ?? []);
+    }
+    for (const [rgb, type] of this.guideDim) {
+      editor.setDecorations(type, stepDim.get(rgb) ?? []);
+    }
+
+    // notes, at the start or end of the item's first line: marker notes, then
+    // guide summaries (function header) and numbered step notes
     const noteAtStart =
       vscode.workspace
         .getConfiguration('sightread')
         .get<string>('marker.notePosition', 'lineEnd') === 'lineStart';
+    const noteOption = (line: number, text: string, rgb: string): vscode.DecorationOptions => {
+      const noteStyle = {
+        contentText: noteAtStart ? `${text} ` : ` ${text}`,
+        color: `rgba(${rgb}, 0.85)`,
+        fontStyle: 'italic',
+        margin: noteAtStart ? '0 0.8em 0 0' : '0 0 0 1.5em',
+      };
+      if (noteAtStart) {
+        return {
+          range: new vscode.Range(line, 0, line, 0),
+          renderOptions: { before: noteStyle },
+        };
+      }
+      const eol = doc.lineAt(line).text.length;
+      return {
+        range: new vscode.Range(line, eol, line, eol),
+        renderOptions: { after: noteStyle },
+      };
+    };
     const noteOptions: vscode.DecorationOptions[] = markers
       .filter((m) => m.note)
-      .map((m) => {
-        const noteStyle = {
-          contentText: noteAtStart ? `✎ ${m.note} ` : ` ✎ ${m.note}`,
-          color: `rgba(${PALETTE[m.color]}, 0.85)`,
-          fontStyle: 'italic',
-          margin: noteAtStart ? '0 0.8em 0 0' : '0 0 0 1.5em',
-        };
-        if (noteAtStart) {
-          return {
-            range: new vscode.Range(m.startLine, 0, m.startLine, 0),
-            renderOptions: { before: noteStyle },
-          };
+      .map((m) => noteOption(m.startLine, `✎ ${m.note}`, PALETTE[m.color]));
+    for (const g of guides) {
+      if (g.summary) {
+        noteOptions.push(noteOption(g.startLine, `✦ ${g.summary}`, GUIDE_RGB));
+      }
+      g.steps.forEach((s, i) => {
+        if (s.startLine <= lastLine) {
+          const role = s.role ? `[${s.role}] ` : '';
+          noteOptions.push(
+            noteOption(s.startLine, `${stepBadge(i)} ${role}${s.note}`, guideRoleRgb(s.role)),
+          );
         }
-        const eol = doc.lineAt(m.startLine).text.length;
-        return {
-          range: new vscode.Range(m.startLine, eol, m.startLine, eol),
-          renderOptions: { after: noteStyle },
-        };
       });
+    }
     editor.setDecorations(this.noteType, noteOptions);
 
     // variable tint (stroke channel); hidden inside dimmed regions
@@ -229,6 +302,12 @@ export class Compositor implements vscode.Disposable {
       t.dispose();
     }
     for (const t of this.markerDim.values()) {
+      t.dispose();
+    }
+    for (const t of this.guideFull.values()) {
+      t.dispose();
+    }
+    for (const t of this.guideDim.values()) {
       t.dispose();
     }
     this.noteType.dispose();

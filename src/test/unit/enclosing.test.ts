@@ -1,8 +1,10 @@
 import * as assert from 'assert';
 import {
   EnclosingCandidate,
+  UnitCandidate,
   chooseEnclosingFunction,
   chooseInnermostFunction,
+  chooseInterpretUnit,
   chooseOutermostFunction,
 } from '../../core/enclosing';
 
@@ -12,6 +14,19 @@ interface Named extends EnclosingCandidate {
 
 function c(name: string, startLine: number, endLine: number, fnKind = true): Named {
   return { name, startLine, endLine, fnKind };
+}
+
+interface NamedUnit extends UnitCandidate {
+  name: string;
+}
+
+function u(
+  name: string,
+  startLine: number,
+  endLine: number,
+  kind: 'fn' | 'class' | 'other',
+): NamedUnit {
+  return { name, startLine, endLine, fnKind: kind === 'fn', classKind: kind === 'class' };
 }
 
 suite('enclosing: chooseEnclosingFunction', () => {
@@ -124,5 +139,26 @@ suite('enclosing: chooseOutermostFunction', () => {
     const outerArrow = c('outerArrow', 0, 20, false);
     const innerArrow = c('innerArrow', 3, 8, false);
     assert.strictEqual(chooseOutermostFunction([innerArrow, outerArrow])?.name, 'outerArrow');
+  });
+});
+
+suite('enclosing: chooseInterpretUnit', () => {
+  test('innermost function wins over its enclosing class', () => {
+    const r = chooseInterpretUnit([u('C', 0, 20, 'class'), u('m', 3, 8, 'fn')]);
+    assert.deepStrictEqual([r?.unit, r?.candidate.name], ['function', 'm']);
+  });
+
+  test('inside a class but outside every method → class', () => {
+    const r = chooseInterpretUnit([u('C', 0, 20, 'class')]);
+    assert.deepStrictEqual([r?.unit, r?.candidate.name], ['class', 'C']);
+  });
+
+  test('a multi-line non-class symbol falls back to function (arrow fn)', () => {
+    const r = chooseInterpretUnit([u('handler', 2, 6, 'other')]);
+    assert.deepStrictEqual([r?.unit, r?.candidate.name], ['function', 'handler']);
+  });
+
+  test('nothing containing → undefined (file unit)', () => {
+    assert.strictEqual(chooseInterpretUnit([]), undefined);
   });
 });

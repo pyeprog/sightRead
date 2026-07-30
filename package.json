@@ -2,7 +2,7 @@
   "name": "sightread",
   "displayName": "SightRead",
   "description": "A reading lens for code: highlight, dim, fold and outline function segments to help you understand code in place.",
-  "version": "1.3.5",
+  "version": "1.4.0",
   "publisher": "WaylongLeon",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -45,6 +45,28 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "sightread.interpretFunction",
+        "title": "Interpret Current (AI)",
+        "category": "SightRead",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "sightread.guideNextStep",
+        "title": "Guide: Next Step",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.guidePrevStep",
+        "title": "Guide: Previous Step",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.removeGuide",
+        "title": "Remove Guide",
+        "category": "SightRead",
+        "icon": "$(trash)"
+      },
       {
         "command": "sightread.foldSkeleton",
         "title": "Fold Skeleton (Current Function)",
@@ -264,6 +286,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "sightread.removeGuide",
+          "when": "false"
+        },
+        {
           "command": "sightread.removeMarker",
           "when": "false"
         },
@@ -335,12 +361,12 @@
           "group": "navigation@1"
         },
         {
-          "command": "sightread.markPickColor",
+          "command": "sightread.mark",
           "when": "view == sightread.markersView",
           "group": "navigation@2"
         },
         {
-          "command": "sightread.mark",
+          "command": "sightread.interpretFunction",
           "when": "view == sightread.markersView",
           "group": "navigation@3"
         },
@@ -374,6 +400,11 @@
         {
           "command": "sightread.removeMarker",
           "when": "view == sightread.markersView && viewItem == marker",
+          "group": "inline"
+        },
+        {
+          "command": "sightread.removeGuide",
+          "when": "view == sightread.markersView && viewItem == guide",
           "group": "inline"
         },
         {
@@ -419,6 +450,10 @@
         }
       ],
       "sightread.menu": [
+        {
+          "command": "sightread.interpretFunction",
+          "group": "0_ai@1"
+        },
         {
           "command": "sightread.markFavorite",
           "group": "1_mark@1"
@@ -520,6 +555,39 @@
     "configuration": {
       "title": "SightRead",
       "properties": {
+        "sightread.guide.harness": {
+          "type": "string",
+          "default": "auto",
+          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
+        },
+        "sightread.guide.customHarnesses": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
+        },
+        "sightread.guide.language": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Language of the notes and summary in AI-generated guides (e.g. `简体中文`, `Japanese`, `Deutsch`). Empty = English."
+        },
+        "sightread.guide.promptTemplate.function": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Custom reading instructions when interpreting a FUNCTION (empty = builtin default: structure roles — main/setup/fallback/special — plus the existence-reason of at most 9 core entities). Placeholders:\n- `${filePath}` — file path relative to the workspace\n- `${languageId}` — programming language\n- `${subjectName}` — the function's name\n- `${subjectText}` — its source with absolute line numbers\n- `${fileHeader}` — the file's import region\n- `${userNote}` — what you type into the per-run focus box\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+        },
+        "sightread.guide.promptTemplate.class": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Custom reading instructions when interpreting a CLASS (empty = builtin default: one step per member, role-tagged entry/helper/util/lifecycle/state, notes give the member's reason to exist). Same placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}`/`${subjectText}` are the class's name and source. The JSON output contract is appended by SightRead and always wins on conflict."
+        },
+        "sightread.guide.promptTemplate.file": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Custom reading instructions when interpreting a whole FILE (empty = builtin default: one step per top-level block, role-tagged config/types/core/wiring/util/exports, notes give the block's reason to exist). Same placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}`/`${subjectText}` are the file's basename and source. The JSON output contract is appended by SightRead and always wins on conflict."
+        },
         "sightread.variableTint.enabled": {
           "type": "boolean",
           "default": true,
