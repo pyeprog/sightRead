@@ -84,7 +84,7 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 | `SightRead: Remove Markers in Selection` | 清除选区内的标记 |
 | `SightRead: Remove Markers in Current Function` | 清除当前函数内的标记 |
 | `SightRead: Remove Markers in File` | 清除当前文件内的标记 |
-| `SightRead: Remove All Markers (Workspace)` | 清除工作区内的全部标记 |
+| `SightRead: Remove All Markers & Guides (Workspace)` | 清除工作区内的全部标记与 AI 解读 |
 | `SightRead: Interpret Current (AI)` | AI 就地标注光标处的函数/类/文件，产出带角色的路标 |
 | `SightRead: Guide: Next Step` / `Guide: Previous Step` | 在当前文件解读的步骤间跳转 |
 | `SightRead: Choose Spotlight Level…` | 从列表选档位，等同点击状态栏的 👁 |

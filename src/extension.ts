@@ -151,7 +151,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   }
 
   // ---- commands --------------------------------------------------------------
-  registerHighlighterCommands(context, repo, compositor);
+  registerHighlighterCommands(context, repo, guideRepo, compositor);
   registerSkeletonFoldCommands(context, segmentCache, {
     afterFold: () => segmentsView.collapseAllTree(),
     afterUnfold: () => segmentsView.expandAll(),

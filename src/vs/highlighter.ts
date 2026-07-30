@@ -9,6 +9,7 @@ import {
   markersAtLine,
   removeInLineRange,
 } from '../core/markers';
+import { Guide } from '../core/guide';
 import { Compositor } from './compositor';
 import { ItemRepository, newId } from './itemRepository';
 import { findFunctionAtCursor } from './symbols';
@@ -100,6 +101,7 @@ function addMarker(
 export function registerHighlighterCommands(
   context: vscode.ExtensionContext,
   repo: MarkerRepository,
+  guideRepo: ItemRepository<Guide>,
   compositor: Compositor,
 ): void {
   const withEditor = (fn: (editor: vscode.TextEditor) => void | Promise<void>) => (): void => {
@@ -192,12 +194,13 @@ export function registerHighlighterCommands(
     ),
     vscode.commands.registerCommand('sightread.removeAllMarkers', async () => {
       const confirmed = await vscode.window.showWarningMessage(
-        'Remove all SightRead markers in this workspace?',
+        'Remove all SightRead markers and AI guides in this workspace?',
         { modal: true },
         'Remove All',
       );
       if (confirmed === 'Remove All') {
         repo.clearAll();
+        guideRepo.clearAll();
         compositor.renderVisible();
       }
     }),

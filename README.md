@@ -82,7 +82,7 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `SightRead: Remove Markers in Selection` | clear markers touching the selection |
 | `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
 | `SightRead: Remove Markers in File` | clear markers in the current file |
-| `SightRead: Remove All Markers (Workspace)` | clear every marker in the workspace |
+| `SightRead: Remove All Markers & Guides (Workspace)` | clear every marker and AI guide in the workspace |
 | `SightRead: Interpret Current (AI)` | AI-annotate the function / class / file at the cursor with role-tagged signposts |
 | `SightRead: Guide: Next Step` / `Guide: Previous Step` | jump between the steps of the guide in the current file |
 | `SightRead: Choose Spotlight Level…` | pick the level from a list, same as clicking the 👁 status-bar item |

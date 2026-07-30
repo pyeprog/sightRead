@@ -119,7 +119,7 @@
       },
       {
         "command": "sightread.removeAllMarkers",
-        "title": "Remove All Markers (Workspace)",
+        "title": "Remove All Markers & Guides (Workspace)",
         "category": "SightRead",
         "icon": "$(clear-all)"
       },
