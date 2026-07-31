@@ -240,7 +240,8 @@ export class GuideFeature implements vscode.Disposable {
    * Multi-select over the role keys present in the active file's guides plus
    * whatever is currently hidden (so a hidden role can always be brought
    * back). Checked = visible; confirming hides the unchecked. Session-wide
-   * state, owned by the compositor; the Markers view stays unfiltered.
+   * state, owned by the compositor; hiding applies everywhere — editor
+   * decorations, the Markers view, and the Segments-view tint.
    */
   private async filterRoles(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
@@ -275,7 +276,7 @@ export class GuideFeature implements vscode.Disposable {
     });
     const picked = await vscode.window.showQuickPick(items, {
       title: 'Guide Steps: Visible Roles',
-      placeHolder: 'Unchecked roles are hidden in the editor (the Markers view still lists them)',
+      placeHolder: 'Unchecked roles are hidden everywhere — editor, Markers and Segments views',
       canPickMany: true,
     });
     if (!picked) {

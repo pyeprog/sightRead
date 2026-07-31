@@ -1,5 +1,12 @@
 import * as assert from 'assert';
-import { Guide, GuideStep, applyChangesToGuides, roleKey, stepVisible } from '../../core/guide';
+import {
+  Guide,
+  GuideStep,
+  applyChangesToGuides,
+  roleKey,
+  stepVisible,
+  stepsInLineRange,
+} from '../../core/guide';
 import { EditChange } from '../../core/markers';
 
 function step(startLine: number, endLine: number, id: string): GuideStep {
@@ -47,6 +54,26 @@ suite('guide: applyChangesToGuides', () => {
     const r = applyChangesToGuides([g], [change(25, 0, 25, 4, 1)]);
     assert.strictEqual(r.changed, false);
     assert.deepStrictEqual([r.guides[0].startLine, r.guides[0].steps[0].startLine], [10, 12]);
+  });
+});
+
+suite('guide: stepsInLineRange', () => {
+  test('returns intersecting steps across guides, ascending by startLine', () => {
+    const a = guide(10, 20, [step(12, 14, 'a'), step(18, 19, 'b')]);
+    const b = guide(30, 40, [step(31, 33, 'c')]);
+    assert.deepStrictEqual(
+      stepsInLineRange([b, a], 13, 32).map((s) => s.id),
+      ['a', 'b', 'c'],
+    );
+  });
+
+  test('partial overlap counts; disjoint ranges return nothing', () => {
+    const g = guide(10, 20, [step(12, 14, 'a')]);
+    assert.deepStrictEqual(
+      stepsInLineRange([g], 14, 30).map((s) => s.id),
+      ['a'],
+    );
+    assert.deepStrictEqual(stepsInLineRange([g], 15, 30), []);
   });
 });
 
