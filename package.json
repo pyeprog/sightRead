@@ -574,19 +574,19 @@
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a FUNCTION (empty = builtin default: structure roles — main/setup/fallback/special — plus the existence-reason of at most 9 core entities). Placeholders:\n- `${filePath}` — file path relative to the workspace\n- `${languageId}` — programming language\n- `${subjectName}` — the function's name\n- `${subjectText}` — its source with absolute line numbers\n- `${fileHeader}` — the file's import region\n- `${userNote}` — what you type into the per-run focus box\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+          "markdownDescription": "Custom reading instructions when interpreting a **function**.\n\nEmpty = builtin default: structure roles (main / setup / fallback / special), plus the existence-reason of at most 9 core entities.\n\nPlaceholders:\n- `${filePath}` — file path relative to the workspace\n- `${languageId}` — programming language\n- `${subjectName}` — the function's name\n- `${subjectText}` — its source with absolute line numbers\n- `${fileHeader}` — the file's import region\n- `${userNote}` — what you type into the per-run focus box\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
         },
         "sightread.guide.promptTemplate.class": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a CLASS (empty = builtin default: one step per member, role-tagged entry/helper/util/lifecycle/state, notes give the member's reason to exist). Same placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}`/`${subjectText}` are the class's name and source. The JSON output contract is appended by SightRead and always wins on conflict."
+          "markdownDescription": "Custom reading instructions when interpreting a **class**.\n\nEmpty = builtin default: one step per member, role-tagged (entry / helper / util / lifecycle / state), notes give the member's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the class's name and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
         },
         "sightread.guide.promptTemplate.file": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a whole FILE (empty = builtin default: one step per top-level block, role-tagged config/types/core/wiring/util/exports, notes give the block's reason to exist). Same placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}`/`${subjectText}` are the file's basename and source. The JSON output contract is appended by SightRead and always wins on conflict."
+          "markdownDescription": "Custom reading instructions when interpreting a whole **file**.\n\nEmpty = builtin default: one step per top-level block, role-tagged (config / types / core / wiring / util / exports), notes give the block's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the file's basename and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
         },
         "sightread.variableTint.enabled": {
           "type": "boolean",
