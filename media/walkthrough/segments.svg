@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <rect x="60" y="50" width="680" height="400" rx="14" fill="var(--vscode-editor-background,#1f1f1f)"/>
+  <rect x="60" y="50" width="230" height="400" rx="14" fill="var(--vscode-sideBar-background,#181818)"/>
+  <rect x="176" y="50" width="114" height="400" fill="var(--vscode-sideBar-background,#181818)"/>
+  <line x1="290" y1="51" x2="290" y2="449" stroke="var(--vscode-panel-border,#3a3a3a)"/>
+  <rect x="60" y="50" width="680" height="400" rx="14" fill="none" stroke="var(--vscode-panel-border,#3a3a3a)"/>
+  <circle cx="88" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <circle cx="106" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <circle cx="124" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <rect x="70" y="182" width="212" height="28" rx="6" fill="var(--vscode-list-inactiveSelectionBackground,#37373d)"/>
+  <rect x="86" y="100" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerPurple,#BB86FC)" opacity="0.75"/>
+  <rect x="105" y="100" width="112" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="106" y="130" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.75"/>
+  <rect x="125" y="130" width="88" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="106" y="160" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerGreen,#58C878)" opacity="0.75"/>
+  <rect x="125" y="160" width="120" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="126" y="190" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerBlue,#5A9CFF)" opacity="0.95"/>
+  <rect x="145" y="190" width="84" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.85"/>
+  <rect x="106" y="220" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.75"/>
+  <rect x="125" y="220" width="100" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="86" y="250" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerRed,#FF6363)" opacity="0.75"/>
+  <rect x="105" y="250" width="96" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="106" y="280" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerGreen,#58C878)" opacity="0.75"/>
+  <rect x="125" y="280" width="128" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="126" y="310" width="11" height="11" rx="3" fill="var(--vscode-sightread-markerBlue,#5A9CFF)" opacity="0.75"/>
+  <rect x="145" y="310" width="78" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.4"/>
+  <rect x="314" y="229" width="5" height="74" rx="2.5" fill="var(--vscode-focusBorder,#0078d4)" opacity="0.9"/>
+  <rect x="330" y="104" width="240" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="354" y="130" width="300" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="354" y="156" width="200" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="330" y="182" width="260" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="354" y="208" width="330" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="330" y="234" width="280" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.85"/>
+  <rect x="354" y="260" width="340" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.85"/>
+  <rect x="378" y="286" width="220" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.85"/>
+  <rect x="330" y="312" width="250" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="354" y="338" width="300" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <rect x="354" y="364" width="180" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.14"/>
+  <path d="M284 196 C 308 196, 292 240, 310 240" fill="none" stroke="var(--vscode-focusBorder,#0078d4)" stroke-width="1.6" stroke-dasharray="3 4" opacity="0.65"/>
+  <circle cx="284" cy="196" r="2.5" fill="var(--vscode-focusBorder,#0078d4)"/>
+  <circle cx="310" cy="240" r="2.5" fill="var(--vscode-focusBorder,#0078d4)"/>
+</svg>

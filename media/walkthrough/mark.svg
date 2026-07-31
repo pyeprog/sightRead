@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <rect x="60" y="50" width="680" height="400" rx="14" fill="var(--vscode-editor-background,#1f1f1f)" stroke="var(--vscode-panel-border,#3a3a3a)"/>
+  <circle cx="88" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <circle cx="106" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <circle cx="124" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
+  <rect x="104" y="149" width="566" height="52" rx="8" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.10"/>
+  <rect x="95" y="151" width="5" height="48" rx="2.5" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.95"/>
+  <rect x="104" y="253" width="566" height="26" rx="8" fill="var(--vscode-sightread-markerRed,#FF6363)" opacity="0.10"/>
+  <rect x="95" y="255" width="5" height="22" rx="2.5" fill="var(--vscode-sightread-markerRed,#FF6363)" opacity="0.95"/>
+  <rect x="104" y="305" width="566" height="52" rx="8" fill="var(--vscode-sightread-markerGreen,#58C878)" opacity="0.10"/>
+  <rect x="95" y="307" width="5" height="48" rx="2.5" fill="var(--vscode-sightread-markerGreen,#58C878)" opacity="0.95"/>
+  <rect x="120" y="104" width="320" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="148" y="130" width="400" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="148" y="156" width="440" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.55"/>
+  <rect x="176" y="182" width="300" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.55"/>
+  <rect x="148" y="208" width="260" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="120" y="234" width="340" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="148" y="260" width="420" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.55"/>
+  <rect x="148" y="286" width="300" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="120" y="312" width="360" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.55"/>
+  <rect x="148" y="338" width="430" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.55"/>
+  <rect x="148" y="364" width="240" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="120" y="390" width="180" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.28"/>
+  <rect x="602" y="147" width="80" height="30" rx="7" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.08"/>
+  <rect x="602" y="147" width="80" height="30" rx="7" fill="none" stroke="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.75"/>
+  <rect x="613" y="156" width="44" height="4" rx="2" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.8"/>
+  <rect x="613" y="164" width="28" height="4" rx="2" fill="var(--vscode-sightread-markerYellow,#FFC828)" opacity="0.5"/>
+</svg>
