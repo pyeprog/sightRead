@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LineRange, intersectsAny, subtractRanges } from '../core/focus';
-import { Guide } from '../core/guide';
+import { Guide, stepVisible } from '../core/guide';
 import { MARKER_COLORS, Marker, MarkerColor } from '../core/markers';
 import { GUIDE_RGB, GUIDE_ROLE_RGBS, PALETTE, guideRoleRgb, gutterIcon } from './palette';
 
@@ -49,6 +49,8 @@ export class Compositor implements vscode.Disposable {
   private dimLight!: vscode.TextEditorDecorationType;
 
   private transient = new Map<string, TransientState>();
+  /** role keys whose guide steps are not rendered at all (session state) */
+  private hiddenGuideRoles: ReadonlySet<string> = new Set();
 
   constructor(
     private getMarkers: (uri: vscode.Uri) => Marker[],
@@ -136,6 +138,14 @@ export class Compositor implements vscode.Disposable {
     this.transient.set(uri.toString(), state);
   }
 
+  setHiddenGuideRoles(hidden: ReadonlySet<string>): void {
+    this.hiddenGuideRoles = hidden;
+  }
+
+  getHiddenGuideRoles(): ReadonlySet<string> {
+    return this.hiddenGuideRoles;
+  }
+
   /** test hook */
   getTransient(uri: vscode.Uri): TransientState | undefined {
     return this.transient.get(uri.toString());
@@ -215,7 +225,7 @@ export class Compositor implements vscode.Disposable {
     const stepDim = new Map<string, vscode.Range[]>();
     for (const g of guides) {
       for (const s of g.steps) {
-        if (s.startLine > lastLine) {
+        if (s.startLine > lastLine || !stepVisible(s.role, this.hiddenGuideRoles)) {
           continue;
         }
         const span = { start: s.startLine, end: Math.min(s.endLine, lastLine) };
@@ -264,7 +274,7 @@ export class Compositor implements vscode.Disposable {
         noteOptions.push(noteOption(g.startLine, `✦ ${g.summary}`, GUIDE_RGB));
       }
       g.steps.forEach((s, i) => {
-        if (s.startLine <= lastLine) {
+        if (s.startLine <= lastLine && stepVisible(s.role, this.hiddenGuideRoles)) {
           const role = s.role ? `[${s.role}] ` : '';
           noteOptions.push(
             noteOption(s.startLine, `${stepBadge(i)} ${role}${s.note}`, guideRoleRgb(s.role)),
