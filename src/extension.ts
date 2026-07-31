@@ -78,6 +78,32 @@ export function activate(context: vscode.ExtensionContext): unknown {
     spotlightStatus.text = `$(${level === 0 ? 'eye-closed' : 'eye'}) ${SPOTLIGHT_LEVEL_NAMES[level]}`;
   };
   spotlightStatus.show();
+  // an active role filter hides guide steps everywhere — without a global
+  // signal, a forgotten filter reads as lost steps
+  const guideFilterStatus = vscode.window.createStatusBarItem(
+    'sightread.guideFilter',
+    vscode.StatusBarAlignment.Right,
+    99,
+  );
+  guideFilterStatus.name = 'SightRead Guide Filter';
+  guideFilterStatus.command = 'sightread.guideFilterRoles';
+  context.subscriptions.push(guideFilterStatus);
+  const syncGuideFilterUi = (): void => {
+    const hidden = compositor.getHiddenGuideRoles();
+    if (hidden.size === 0) {
+      guideFilterStatus.hide();
+      return;
+    }
+    const roles = [...hidden]
+      .sort()
+      .map((key) => key || '(untagged)')
+      .join(', ');
+    guideFilterStatus.text = `$(filter-filled) ${hidden.size} hidden`;
+    guideFilterStatus.tooltip = `SightRead: guide roles hidden everywhere — ${roles}. Click to change.`;
+    guideFilterStatus.show();
+  };
+  context.subscriptions.push(compositor.onDidChangeHiddenGuideRoles(syncGuideFilterUi));
+  syncGuideFilterUi();
 
   // ---- the single cursor pipeline (design.md §四) ----------------------------
   // selection change → enclosing function → tint → segments → focus → render.
@@ -167,20 +193,29 @@ export function activate(context: vscode.ExtensionContext): unknown {
     scheduleRefresh();
   };
   context.subscriptions.push(
-    vscode.commands.registerCommand('sightread.spotlightSelect', async () => {
-      const picked = await vscode.window.showQuickPick(
-        SPOTLIGHT_PICK_ITEMS.map((item) => ({
-          ...item,
-          description:
-            item.level === spotlight.currentLevel
-              ? `${item.description} — current`
-              : item.description,
-        })),
-        { title: 'Spotlight Level', placeHolder: 'What stays lit — everything else is dimmed' },
-      );
-      if (picked) {
-        setSpotlight(picked.level);
-      }
+    vscode.commands.registerCommand('sightread.spotlightSelect', () => {
+      type SpotlightPick = vscode.QuickPickItem & { level: SpotlightLevel };
+      const qp = vscode.window.createQuickPick<SpotlightPick>();
+      qp.title = 'Spotlight Level';
+      qp.placeholder = 'What stays lit — everything else is dimmed';
+      qp.items = SPOTLIGHT_PICK_ITEMS.map((item) => ({
+        ...item,
+        description:
+          item.level === spotlight.currentLevel
+            ? `${item.description} — current`
+            : item.description,
+      }));
+      // open with the cursor on the current level, so Enter is a no-op keep
+      qp.activeItems = qp.items.filter((item) => item.level === spotlight.currentLevel);
+      qp.onDidAccept(() => {
+        const picked = qp.selectedItems[0];
+        qp.hide();
+        if (picked) {
+          setSpotlight(picked.level);
+        }
+      });
+      qp.onDidHide(() => qp.dispose());
+      qp.show();
     }),
     vscode.commands.registerCommand('sightread.spotlightOff', () => setSpotlight(0)),
     vscode.commands.registerCommand('sightread.spotlightFunction', () => setSpotlight(1)),

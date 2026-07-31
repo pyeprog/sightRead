@@ -244,6 +244,43 @@
         "icon": "$(trash)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "sightread.spotlightSelect",
+        "key": "ctrl+k l",
+        "mac": "cmd+k l"
+      },
+      {
+        "command": "sightread.mark",
+        "key": "ctrl+k n",
+        "mac": "cmd+k n",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.removeMarkersInSelection",
+        "key": "ctrl+k backspace",
+        "mac": "cmd+k backspace",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.interpretFunction",
+        "key": "ctrl+k g",
+        "mac": "cmd+k g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.foldSkeleton",
+        "key": "ctrl+k [",
+        "mac": "cmd+k [",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.unfoldSkeleton",
+        "key": "ctrl+k ]",
+        "mac": "cmd+k ]",
+        "when": "editorTextFocus"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -257,23 +294,31 @@
       "sightread": [
         {
           "id": "sightread.entriesView",
-          "name": "Entry Points"
+          "name": "Entry Points",
+          "icon": "$(sign-in)"
         },
         {
           "id": "sightread.segmentsView",
-          "name": "Segments"
+          "name": "Segments",
+          "icon": "$(list-tree)"
         },
         {
           "id": "sightread.markersView",
-          "name": "Markers"
+          "name": "Markers",
+          "icon": "$(bookmark)"
         },
         {
           "id": "sightread.trailView",
-          "name": "Trail"
+          "name": "Trail",
+          "icon": "$(type-hierarchy)"
         }
       ]
     },
     "viewsWelcome": [
+      {
+        "view": "sightread.markersView",
+        "contents": "No markers yet. Select lines in the editor and mark them, or let AI lay out reading signposts for the current function, class or file.\n[Mark Selection](command:sightread.mark)\n[Interpret Current (AI)](command:sightread.interpretFunction)"
+      },
       {
         "view": "sightread.trailView",
         "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
@@ -353,13 +398,13 @@
         },
         {
           "command": "sightread.foldSkeleton",
-          "when": "view == sightread.segmentsView",
+          "when": "view == sightread.segmentsView && !sightread.skeletonFolded",
           "group": "navigation@2"
         },
         {
           "command": "sightread.unfoldSkeleton",
-          "when": "view == sightread.segmentsView",
-          "group": "navigation@3"
+          "when": "view == sightread.segmentsView && sightread.skeletonFolded",
+          "group": "navigation@2"
         },
         {
           "command": "sightread.markFavorite",
@@ -782,8 +827,8 @@
     "@types/vscode": "^1.80.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.1",
     "eslint": "^9.16.0",
     "mocha": "^10.8.2",

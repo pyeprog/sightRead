@@ -117,6 +117,17 @@ export class SegmentsViewFeature
       guideRepo.onDidChange(retint),
       compositor.onDidChangeHiddenGuideRoles(retint),
     );
+    void vscode.commands.executeCommand('setContext', 'sightread.skeletonFolded', false);
+  }
+
+  /** Tracks defaultCollapsed and mirrors it into the when-clause context that
+   *  swaps the fold/unfold title button. */
+  private setFolded(folded: boolean): void {
+    if (this.defaultCollapsed === folded) {
+      return;
+    }
+    this.defaultCollapsed = folded;
+    void vscode.commands.executeCommand('setContext', 'sightread.skeletonFolded', folded);
   }
 
   /** Whether any marker or visible guide step intersects the segment's line range ("相交即染"). */
@@ -148,14 +159,14 @@ export class SegmentsViewFeature
 
   /** Collapses all tree nodes (used by the fold-skeleton button). */
   collapseAllTree(): void {
-    this.defaultCollapsed = true;
+    this.setFolded(true);
     this.generation++;
     this.emitter.fire();
   }
 
   /** Expands all tree nodes again (used by the unfold-skeleton button). */
   expandAll(): void {
-    this.defaultCollapsed = false;
+    this.setFolded(false);
     this.generation++;
     this.emitter.fire();
   }
@@ -196,7 +207,7 @@ export class SegmentsViewFeature
     const key = fn ? `${doc.uri.toString()}:${fn.range.start.line}` : undefined;
     if (key !== this.currentKey) {
       this.currentKey = key;
-      this.defaultCollapsed = false;
+      this.setFolded(false);
     }
     if (!fn) {
       this.view.message = 'Place the cursor inside a function to see its segments.';
@@ -459,7 +470,13 @@ export function registerSegmentFoldCommands(context: vscode.ExtensionContext): v
   );
 }
 
-/** "Go to Segment…" — QuickPick over the flattened segment tree. */
+/**
+ * "Go to Segment…" — QuickPick over the flattened segment tree, opened on the
+ * cursor's segment. Moving the highlight previews the segment in the editor
+ * (range highlight + scroll), the native Go to Symbol behavior; Esc restores
+ * the viewport. The preview never touches the selection, so the cursor
+ * pipeline (spotlight, trail) stays out of it.
+ */
 export function registerGoToSegment(
   context: vscode.ExtensionContext,
   cache: SegmentCache,
@@ -480,30 +497,71 @@ export function registerGoToSegment(
         void vscode.window.showInformationMessage('SightRead: no segments detected here.');
         return;
       }
-      const flat: { node: DocSegmentNode; depth: number }[] = [];
+      type SegmentPick = vscode.QuickPickItem & { segment: DocSegmentNode };
+      const items: SegmentPick[] = [];
       const flatten = (nodes: DocSegmentNode[], depth: number): void => {
         for (const node of nodes) {
-          flat.push({ node, depth });
+          items.push({
+            // em-space indentation (plain spaces vanish in the proportional
+            // quick-pick font); icons match the Segments view
+            label: `${'\u2003'.repeat(depth)}$(${KIND_ICONS[node.kind].icon}) ${node.name}`,
+            description: node.detail,
+            segment: node,
+          });
           flatten(node.children, depth + 1);
         }
       };
       flatten(tree, 0);
-      const picked = await vscode.window.showQuickPick(
-        flat.map((f) => ({
-          label: `${' '.repeat(f.depth)}${f.node.name}`,
-          description: f.node.detail,
-          segment: f.node,
-        })),
-        { placeHolder: `Segments of ${fn.name}` },
-      );
-      if (picked) {
-        const pos = new vscode.Position(picked.segment.startLine, 0);
-        editor.selection = new vscode.Selection(pos, pos);
-        editor.revealRange(
-          new vscode.Range(pos, pos),
-          vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-        );
+      const previewDeco = vscode.window.createTextEditorDecorationType({
+        backgroundColor: new vscode.ThemeColor('editor.rangeHighlightBackground'),
+        isWholeLine: true,
+      });
+      const origin = editor.visibleRanges[0];
+      const qp = vscode.window.createQuickPick<SegmentPick>();
+      qp.placeholder = `Segments of ${fn.name}`;
+      qp.matchOnDescription = true;
+      qp.items = items;
+      // open on the cursor's segment
+      const cursorPath = pathToLine(tree, editor.selection.active.line);
+      const atCursor = items.find((item) => item.segment === cursorPath[cursorPath.length - 1]);
+      if (atCursor) {
+        qp.activeItems = [atCursor];
       }
+      let accepted = false;
+      qp.onDidChangeActive((active) => {
+        const seg = active[0]?.segment;
+        if (!seg) {
+          return;
+        }
+        const range = new vscode.Range(seg.startLine, 0, seg.endLine, 0);
+        editor.setDecorations(previewDeco, [range]);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      });
+      qp.onDidAccept(() => {
+        accepted = true;
+        const seg = qp.selectedItems[0]?.segment;
+        qp.hide();
+        if (seg) {
+          const pos = new vscode.Position(seg.startLine, 0);
+          editor.selection = new vscode.Selection(pos, pos);
+          editor.revealRange(
+            new vscode.Range(pos, pos),
+            vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+          );
+        }
+      });
+      qp.onDidHide(() => {
+        previewDeco.dispose();
+        if (!accepted && origin) {
+          // Esc — put the viewport back where the preview found it
+          editor.revealRange(
+            new vscode.Range(origin.start, origin.start),
+            vscode.TextEditorRevealType.AtTop,
+          );
+        }
+        qp.dispose();
+      });
+      qp.show();
     }),
   );
 }

@@ -124,6 +124,30 @@ suite('SightRead integration', () => {
     assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
   });
 
+  test('markers view lists markers in line order, not creation order', async () => {
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: 'a\nb\nc\nd\n',
+      language: 'plaintext',
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    editor.selection = new vscode.Selection(2, 0, 2, 1);
+    await vscode.commands.executeCommand('sightread.markFavorite');
+    editor.selection = new vscode.Selection(0, 0, 0, 1);
+    await vscode.commands.executeCommand('sightread.markFavorite');
+
+    const view = api._test.markersView;
+    const fileNode = view
+      .getChildren()
+      .find((n) => n.kind === 'file' && n.uri.toString() === doc.uri.toString());
+    assert.ok(fileNode, 'markers view should list the marked file');
+    const lines = view
+      .getChildren(fileNode)
+      .map((n) => (n.kind === 'marker' ? n.marker.startLine : -1));
+    assert.deepStrictEqual(lines, [0, 2], 'markers should mirror the file top-down');
+    await vscode.commands.executeCommand('sightread.removeMarkersInFile');
+  });
+
   test('removeMarkersInFile clears markers', async () => {
     const api = await getApi();
     const doc = await vscode.workspace.openTextDocument({

@@ -190,10 +190,20 @@ export class GuideFeature implements vscode.Disposable {
           title: `SightRead: interpreting ${target.name} via ${runner.name}…`,
           cancellable: true,
         },
-        (_progress, token) => {
+        (progress, token) => {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
-          return runner.run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal });
+          // the harness is silent until it finishes — an elapsed/limit tick is
+          // the "still alive" signal
+          const startMs = Date.now();
+          const limitS = Math.round(RUN_TIMEOUT_MS / 1000);
+          const ticker = setInterval(() => {
+            const elapsedS = Math.round((Date.now() - startMs) / 1000);
+            progress.report({ message: `${elapsedS}s / ${limitS}s` });
+          }, 1000);
+          return runner
+            .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal })
+            .finally(() => clearInterval(ticker));
         },
       );
     } catch (e) {

@@ -4,6 +4,14 @@ All notable changes to the SightRead extension are documented in this file.
 
 ## [Unreleased]
 
+- **Default keybindings (new)** — a `⌘K`-chord family (`Ctrl+K` on Windows/Linux): `⌘K L` choose spotlight level, `⌘K N` mark selection (color + note), `⌘K ⌫` remove the markers the cursor/selection touches, `⌘K G` interpret current (AI), `⌘K [` / `⌘K ]` fold/unfold skeleton — one modifier less than the native recursive-fold chords they sit beside. All five second-keys are unbound in stock VS Code on every platform. Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows every `⌘K` chord while the editor has focus — rebind Cursor's `⌘K` to use these there.
+- **AI interpret shows elapsed time** — the progress notification ticks `Ns / 180s` while the harness runs, for every harness profile.
+- **Active role filter is visible everywhere it hides things** — a `$(filter-filled)` status-bar item (`N hidden`, tooltip lists the roles, click to change) plus a "N roles hidden" badge on the Markers view title. A forgotten filter used to read as lost guide steps.
+- **`Go to Segment…` previews as you move** — the highlighted row's segment is range-highlighted and scrolled into view (the native Go to Symbol behavior); Esc restores the viewport. Rows now carry the Segments-view kind icons, and the picker opens on the cursor's segment.
+- **Spotlight picker opens on the current level** — Enter keeps what you have; the "— current" tag stays.
+- **Markers view** — markers and guides are listed in file line order instead of creation order; the empty state became welcome content with Mark Selection / Interpret (AI) buttons.
+- **Segments view title** — Fold/Unfold Skeleton merged into one state-swapped button, matching the filter and trail pause/resume pattern.
+- **View icons** — all four views declare icons (shown when a view is dragged out of the SightRead container).
 - **Filter guide steps by role (new)** — `SightRead: Filter Guide Steps by Role…` (also the filter button on the Markers view title bar): a multi-select over the role tags actually present in the current file's guides — each row with its accent color and step count, grouped in palette order. Unchecked roles disappear from the editor entirely (background, gutter, note, overview ruler); step numbering keeps its gaps, the ✦ summary stays, and the Markers view always lists every step. The filter is session-wide and in-memory; a filled filter icon signals that one is active.
 - **Removed** — `Guide: Next Step` / `Guide: Previous Step`. Steps are strictly line-ordered (there is no curated reading order to walk), so stepping commands added nothing over clicking a step in the Markers view or scrolling.
 

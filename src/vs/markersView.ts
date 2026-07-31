@@ -52,11 +52,21 @@ export class MarkersViewFeature
     this.view = vscode.window.createTreeView('sightread.markersView', {
       treeDataProvider: this,
     });
+    // an active role filter silently hides steps — flag it on the view title
+    const syncFilterBadge = (): void => {
+      const hidden = compositor.getHiddenGuideRoles().size;
+      this.view.description =
+        hidden === 0 ? undefined : `${hidden} role${hidden === 1 ? '' : 's'} hidden`;
+    };
+    syncFilterBadge();
     this.subscriptions.push(
       this.view,
       repo.onDidChange(() => this.emitter.fire()),
       guideRepo.onDidChange(() => this.emitter.fire()),
-      compositor.onDidChangeHiddenGuideRoles(() => this.emitter.fire()),
+      compositor.onDidChangeHiddenGuideRoles(() => {
+        syncFilterBadge();
+        this.emitter.fire();
+      }),
       vscode.commands.registerCommand('sightread.removeMarker', (node: MarkersNode) => {
         if (node?.kind !== 'marker') {
           return;
@@ -205,22 +215,19 @@ export class MarkersViewFeature
       const uris = [
         ...new Set([...this.repo.uris(), ...this.guideRepo.uris()]),
       ];
-      const roots: FileNode[] = uris.map((u) => ({
+      // the empty state is the viewsWelcome contribution (package.json)
+      return uris.map((u) => ({
         kind: 'file' as const,
         uri: vscode.Uri.parse(u),
       }));
-      this.view.message = roots.length
-        ? undefined
-        : 'No markers yet — select lines and run "SightRead: Mark Selection", ' +
-          'or run "SightRead: Interpret Current (AI)".';
-      return roots;
     }
     if (node.kind === 'file') {
-      const guides: MarkersNode[] = this.guideRepo
-        .get(node.uri)
+      // line order, not creation order — the list mirrors the file top-down
+      const guides: MarkersNode[] = [...this.guideRepo.get(node.uri)]
+        .sort((a, b) => a.startLine - b.startLine)
         .map((guide) => ({ kind: 'guide' as const, uri: node.uri, guide }));
-      const markers: MarkersNode[] = this.repo
-        .get(node.uri)
+      const markers: MarkersNode[] = [...this.repo.get(node.uri)]
+        .sort((a, b) => a.startLine - b.startLine)
         .map((marker) => ({ kind: 'marker' as const, uri: node.uri, marker }));
       return [...guides, ...markers];
     }
