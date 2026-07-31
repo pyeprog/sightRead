@@ -52,14 +52,16 @@
         "icon": "$(sparkle)"
       },
       {
-        "command": "sightread.guideNextStep",
-        "title": "Guide: Next Step",
-        "category": "SightRead"
+        "command": "sightread.guideFilterRoles",
+        "title": "Filter Guide Steps by Role…",
+        "category": "SightRead",
+        "icon": "$(filter)"
       },
       {
-        "command": "sightread.guidePrevStep",
-        "title": "Guide: Previous Step",
-        "category": "SightRead"
+        "command": "sightread.guideFilterRolesActive",
+        "title": "Filter Guide Steps by Role (Filter Active)…",
+        "category": "SightRead",
+        "icon": "$(filter-filled)"
       },
       {
         "command": "sightread.removeGuide",
@@ -290,6 +292,10 @@
           "when": "false"
         },
         {
+          "command": "sightread.guideFilterRolesActive",
+          "when": "false"
+        },
+        {
           "command": "sightread.removeMarker",
           "when": "false"
         },
@@ -371,9 +377,19 @@
           "group": "navigation@3"
         },
         {
+          "command": "sightread.guideFilterRoles",
+          "when": "view == sightread.markersView && !sightread.guideFilterActive",
+          "group": "navigation@4"
+        },
+        {
+          "command": "sightread.guideFilterRolesActive",
+          "when": "view == sightread.markersView && sightread.guideFilterActive",
+          "group": "navigation@4"
+        },
+        {
           "command": "sightread.removeAllMarkers",
           "when": "view == sightread.markersView",
-          "group": "navigation@4"
+          "group": "navigation@5"
         },
         {
           "command": "sightread.trailPause",

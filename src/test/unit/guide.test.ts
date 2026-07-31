@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { Guide, GuideStep, adjacentStep, applyChangesToGuides, guideAtLine } from '../../core/guide';
+import { Guide, GuideStep, applyChangesToGuides, roleKey, stepVisible } from '../../core/guide';
 import { EditChange } from '../../core/markers';
 
 function step(startLine: number, endLine: number, id: string): GuideStep {
@@ -50,27 +50,21 @@ suite('guide: applyChangesToGuides', () => {
   });
 });
 
-suite('guide: navigation helpers', () => {
-  // reading order deliberately differs from line order
-  const g = guide(0, 50, [step(30, 32, 'first'), step(10, 12, 'second')]);
-
-  test('adjacentStep follows array order, not line order', () => {
-    assert.strictEqual(adjacentStep(g, 31, 1)?.id, 'second');
-    assert.strictEqual(adjacentStep(g, 11, -1)?.id, 'first');
+suite('guide: step visibility filter', () => {
+  test('empty hidden set shows every step', () => {
+    assert.strictEqual(stepVisible('entity', new Set()), true);
+    assert.strictEqual(stepVisible(undefined, new Set()), true);
   });
 
-  test('adjacentStep is undefined past either end of the reading order', () => {
-    assert.strictEqual(adjacentStep(g, 11, 1), undefined);
-    assert.strictEqual(adjacentStep(g, 31, -1), undefined);
+  test('hiding matches the role tag case-insensitively', () => {
+    const hidden = new Set(['entity']);
+    assert.strictEqual(stepVisible('Entity', hidden), false);
+    assert.strictEqual(stepVisible('main', hidden), true);
   });
 
-  test('adjacentStep outside every step enters at the first or last step', () => {
-    assert.strictEqual(adjacentStep(g, 45, 1)?.id, 'first');
-    assert.strictEqual(adjacentStep(g, 45, -1)?.id, 'second');
-  });
-
-  test('guideAtLine finds the guide spanning the line', () => {
-    assert.strictEqual(guideAtLine([g], 40)?.id, 'g1');
-    assert.strictEqual(guideAtLine([g], 51), undefined);
+  test('untagged steps filter through the empty key', () => {
+    assert.strictEqual(roleKey(undefined), '');
+    assert.strictEqual(roleKey(' Setup '), 'setup');
+    assert.strictEqual(stepVisible(undefined, new Set([''])), false);
   });
 });

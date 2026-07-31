@@ -60,25 +60,19 @@ export function applyChangesToGuides(
   return { guides: shifted, changed: r.changed };
 }
 
-export function guideAtLine(guides: Guide[], line: number): Guide | undefined {
-  return guides.find((g) => line >= g.startLine && line <= g.endLine);
+/**
+ * Normalized filter key of a step role: lowercased tag, '' for untagged
+ * steps. The role vocabulary is open (custom templates may define new tags),
+ * so visibility filtering is data-driven over these keys, never over a fixed
+ * role list.
+ */
+export function roleKey(role: string | undefined): string {
+  return role?.trim().toLowerCase() ?? '';
 }
 
-/**
- * The step to jump to from `cursorLine`, following the step list. On a step,
- * the adjacent one (undefined past either end). Outside every step, next
- * enters at the first step and prev at the last.
- */
-export function adjacentStep(
-  guide: Guide,
-  cursorLine: number,
-  dir: 1 | -1,
-): GuideStep | undefined {
-  const idx = guide.steps.findIndex(
-    (s) => cursorLine >= s.startLine && cursorLine <= s.endLine,
-  );
-  if (idx === -1) {
-    return dir === 1 ? guide.steps[0] : guide.steps[guide.steps.length - 1];
-  }
-  return guide.steps[idx + dir];
+export function stepVisible(
+  role: string | undefined,
+  hiddenRoles: ReadonlySet<string>,
+): boolean {
+  return !hiddenRoles.has(roleKey(role));
 }

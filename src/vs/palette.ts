@@ -49,6 +49,21 @@ export function guideRoleRgb(role: string | undefined): string {
   return (role && ROLE_RGB[role.toLowerCase()]) || GUIDE_RGB;
 }
 
+const ROLE_ORDER = Object.keys(ROLE_RGB);
+
+/**
+ * Sort rank for role filter lists: the semantic group order above (so
+ * same-colored roles sit together), then unknown roles, untagged last.
+ * `key` is a normalized roleKey.
+ */
+export function guideRoleRank(key: string): number {
+  if (key === '') {
+    return ROLE_ORDER.length + 1;
+  }
+  const i = ROLE_ORDER.indexOf(key);
+  return i === -1 ? ROLE_ORDER.length : i;
+}
+
 /** every accent a guide step can take — the compositor makes one decoration pair per entry */
 export const GUIDE_ROLE_RGBS: string[] = [...new Set([GUIDE_RGB, ...Object.values(ROLE_RGB)])];
 

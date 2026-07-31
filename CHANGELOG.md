@@ -2,6 +2,11 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [Unreleased]
+
+- **Filter guide steps by role (new)** — `SightRead: Filter Guide Steps by Role…` (also the filter button on the Markers view title bar): a multi-select over the role tags actually present in the current file's guides — each row with its accent color and step count, grouped in palette order. Unchecked roles disappear from the editor entirely (background, gutter, note, overview ruler); step numbering keeps its gaps, the ✦ summary stays, and the Markers view always lists every step. The filter is session-wide and in-memory; a filled filter icon signals that one is active.
+- **Removed** — `Guide: Next Step` / `Guide: Previous Step`. Steps are strictly line-ordered (there is no curated reading order to walk), so stepping commands added nothing over clicking a step in the Markers view or scrolling.
+
 ## [1.4.0] — 2026-07-30
 
 - **AI Interpret (new)** — `SightRead: Interpret Current (AI)`, SightRead's first and only AI feature, bound to the reading-first philosophy: the AI produces signposts, never summaries. The unit resolves from the cursor/selection — the enclosing function, the class when between its methods (or when its definition is selected), or the whole file at the top level. The result is a guide rendered **in place**: line-ordered steps tagged and colored by role (main/setup/fallback/special/entity for functions; entry/helper/util/lifecycle/state for classes; config/types/core/wiring/util/exports for files — vivid colors mark the primary roles), with notes stating why a block or core entity exists (at most 9 entities — the working-memory ceiling), never what the code does. Guides live under a ✦ node in the Markers view, strictly separate from manual markers, and are discarded by any edit inside the interpreted range. `Guide: Next Step` / `Guide: Previous Step` walk the steps.

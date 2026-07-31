@@ -3,9 +3,8 @@ import * as vscode from 'vscode';
 import {
   Guide,
   InterpretUnit,
-  adjacentStep,
   applyChangesToGuides,
-  guideAtLine,
+  roleKey,
 } from '../core/guide';
 import { parseGuideResponse } from '../core/guideParse';
 import { SubjectContext, buildGuidePrompt } from '../core/guidePrompt';
@@ -15,6 +14,7 @@ import { autoDetectionOrder, pickHarness } from './agentCli';
 import { Compositor } from './compositor';
 import { linePreview } from './highlighter';
 import { ItemRepository, newId } from './itemRepository';
+import { circleIcon, guideRoleRank, guideRoleRgb } from './palette';
 import type { GuideNode } from './markersView';
 import { InterpretTarget, resolveInterpretTarget } from './symbols';
 
@@ -129,8 +129,10 @@ export class GuideFeature implements vscode.Disposable {
       vscode.commands.registerCommand('sightread.interpretFunction', () =>
         this.interpretFunction(),
       ),
-      vscode.commands.registerCommand('sightread.guideNextStep', () => this.jump(1)),
-      vscode.commands.registerCommand('sightread.guidePrevStep', () => this.jump(-1)),
+      vscode.commands.registerCommand('sightread.guideFilterRoles', () => this.filterRoles()),
+      vscode.commands.registerCommand('sightread.guideFilterRolesActive', () =>
+        this.filterRoles(),
+      ),
       vscode.commands.registerCommand('sightread.removeGuide', (node: GuideNode) => {
         if (node?.kind !== 'guide') {
           return;
@@ -234,29 +236,60 @@ export class GuideFeature implements vscode.Disposable {
     );
   }
 
-  /** Follows the reading order from the cursor; dir 1 = next, -1 = prev. */
-  private jump(dir: 1 | -1): void {
+  /**
+   * Multi-select over the role keys present in the active file's guides plus
+   * whatever is currently hidden (so a hidden role can always be brought
+   * back). Checked = visible; confirming hides the unchecked. Session-wide
+   * state, owned by the compositor; the Markers view stays unfiltered.
+   */
+  private async filterRoles(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
+    const hidden = this.compositor.getHiddenGuideRoles();
+    const counts = new Map<string, number>();
+    if (editor) {
+      for (const g of this.repo.get(editor.document.uri)) {
+        for (const s of g.steps) {
+          const key = roleKey(s.role);
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+      }
     }
-    const guides = this.repo.get(editor.document.uri);
-    const line = editor.selection.active.line;
-    const guide = guideAtLine(guides, line) ?? guides[0];
-    if (!guide) {
-      void vscode.window.showInformationMessage('SightRead: no guide in this file yet.');
-      return;
-    }
-    const step = adjacentStep(guide, line, dir);
-    if (!step) {
-      return; // past either end of the reading order
-    }
-    const pos = new vscode.Position(step.startLine, 0);
-    editor.selection = new vscode.Selection(pos, pos);
-    editor.revealRange(
-      new vscode.Range(pos, pos),
-      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    const keys = [...new Set([...counts.keys(), ...hidden])].sort(
+      (a, b) => guideRoleRank(a) - guideRoleRank(b) || a.localeCompare(b),
     );
+    if (keys.length === 0) {
+      void vscode.window.showInformationMessage(
+        'SightRead: no guide steps in this file to filter.',
+      );
+      return;
+    }
+    const items = keys.map((key) => {
+      const n = counts.get(key) ?? 0;
+      return {
+        key,
+        label: key || '(untagged)',
+        description: n === 1 ? '1 step' : `${n} steps`,
+        iconPath: circleIcon(guideRoleRgb(key)),
+        picked: !hidden.has(key),
+      };
+    });
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Guide Steps: Visible Roles',
+      placeHolder: 'Unchecked roles are hidden in the editor (the Markers view still lists them)',
+      canPickMany: true,
+    });
+    if (!picked) {
+      return; // Esc — keep the current filter
+    }
+    const visible = new Set(picked.map((i) => i.key));
+    const nextHidden = new Set(keys.filter((k) => !visible.has(k)));
+    this.compositor.setHiddenGuideRoles(nextHidden);
+    void vscode.commands.executeCommand(
+      'setContext',
+      'sightread.guideFilterActive',
+      nextHidden.size > 0,
+    );
+    this.compositor.renderVisible();
   }
 
   dispose(): void {
