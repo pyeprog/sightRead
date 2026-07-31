@@ -279,6 +279,87 @@
         "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
       }
     ],
+    "walkthroughs": [
+      {
+        "id": "sightread.gettingStarted",
+        "title": "Read code with SightRead",
+        "description": "Spotlight, mark, and let AI mark what's worth reading.",
+        "steps": [
+          {
+            "id": "spotlight",
+            "title": "Turn on the spotlight",
+            "description": "Dim everything except what you're reading. The recommended level keeps the cursor's block plus related blocks lit — the eye in the status bar shows the current level and switches it on click.\n[Choose Spotlight Level](command:sightread.spotlightSelect)",
+            "media": {
+              "svg": "media/walkthrough/spotlight.svg",
+              "altText": "Editor with most lines dimmed while the current segment stays lit"
+            },
+            "completionEvents": [
+              "onCommand:sightread.spotlightSelect"
+            ]
+          },
+          {
+            "id": "mark",
+            "title": "Mark what matters",
+            "description": "Select lines and drop a marker in your favorite color — right-click for other colors or to attach a note. Markers persist with the workspace and survive edits.\n[Mark Selection](command:sightread.markFavorite)",
+            "media": {
+              "svg": "media/walkthrough/mark.svg",
+              "altText": "Code lines carrying yellow, red and green markers, the yellow one with a note"
+            },
+            "completionEvents": [
+              "onCommand:sightread.markFavorite"
+            ]
+          },
+          {
+            "id": "segments",
+            "title": "See the function's structure",
+            "description": "The Segments view mirrors the function under your cursor — branches, loops, guards — and follows you as you move. Collapsing a segment folds the code with it.\n[Open Segments View](command:sightread.segmentsView.focus)",
+            "media": {
+              "svg": "media/walkthrough/segments.svg",
+              "altText": "Segments tree beside the editor, the selected segment highlighted in both"
+            },
+            "completionEvents": [
+              "onView:sightread.segmentsView"
+            ]
+          },
+          {
+            "id": "interpret",
+            "title": "Let AI mark what's worth reading",
+            "description": "Steps arrive role-colored with a signpost note on each — why the code exists, not what it says. Needs a coding-agent CLI (claude, codex, …) on your PATH; SightRead probes for one automatically.\n[Interpret Current](command:sightread.interpretFunction)",
+            "media": {
+              "svg": "media/walkthrough/interpret.svg",
+              "altText": "Numbered role-colored step badges beside code blocks, each with a short note"
+            },
+            "completionEvents": [
+              "onCommand:sightread.interpretFunction"
+            ]
+          },
+          {
+            "id": "trail",
+            "title": "Your reading leaves a trail",
+            "description": "While the Trail view is open, jumps to definitions and references build the call tree you actually walked. Click a node to jump back to it.\n[Open Trail View](command:sightread.trailView.focus)",
+            "media": {
+              "svg": "media/walkthrough/trail.svg",
+              "altText": "A small call tree with the current node selected and the visited path emphasized"
+            },
+            "completionEvents": [
+              "onView:sightread.trailView"
+            ]
+          },
+          {
+            "id": "entries",
+            "title": "Start from the entrances",
+            "description": "Entry Points lists what the outside world calls in this file, and chevrons in the gutter mark them in place. Dimmed chevrons are suspected entries — no references found.\n[Go to Entry Point](command:sightread.goToEntry)",
+            "media": {
+              "svg": "media/walkthrough/entries.svg",
+              "altText": "Gutter chevrons marking entry declarations, one dimmed as suspected"
+            },
+            "completionEvents": [
+              "onCommand:sightread.goToEntry"
+            ]
+          }
+        ]
+      }
+    ],
     "submenus": [
       {
         "id": "sightread.menu",
