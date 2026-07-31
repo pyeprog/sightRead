@@ -1,15 +1,17 @@
 import * as vscode from 'vscode';
 import { SPOTLIGHT_LEVEL_NAMES, SpotlightLevel, intersectsAny, pathToLine } from '../core/focus';
+import { GuideStep, stepVisible, stepsInLineRange } from '../core/guide';
 import { markersInLineRange, removeInLineRange } from '../core/markers';
 import { SegmentKind } from '../core/segmentation';
 import { Compositor, SpotlightRender } from './compositor';
+import type { GuideRepository } from './guideFeature';
 import {
   MarkerRepository,
   addLineMarker,
   pickMarkerColor,
   promptMarkerNote,
 } from './highlighter';
-import { markerThemeColor } from './palette';
+import { guideRoleThemeColor, markerThemeColor } from './palette';
 import { DocSegmentNode, SegmentCache } from './segmentCache';
 import { FunctionInfo, findFunctionAtCursor } from './symbols';
 
@@ -89,10 +91,20 @@ export class SegmentsViewFeature
   readonly onDidChangeFileDecorations = this.decoEmitter.event;
   private subscriptions: vscode.Disposable[] = [];
 
-  constructor(private repo: MarkerRepository) {
+  constructor(
+    private repo: MarkerRepository,
+    private guideRepo: GuideRepository,
+    private compositor: Compositor,
+  ) {
     this.view = vscode.window.createTreeView('sightread.segmentsView', {
       treeDataProvider: this,
     });
+    // marker/guide mutations and role-filter changes re-tint labels
+    // (decorations) and icons (tree items)
+    const retint = (): void => {
+      this.emitter.fire();
+      this.decoEmitter.fire(undefined);
+    };
     // tree collapse/expand drives the editor's code folding (one-way: there is
     // no public event for manual code-folding changes, so the reverse relies
     // on the fold/unfold title buttons)
@@ -101,22 +113,25 @@ export class SegmentsViewFeature
       this.view.onDidCollapseElement((e) => this.syncCodeFold(e.element, 'editor.fold')),
       this.view.onDidExpandElement((e) => this.syncCodeFold(e.element, 'editor.unfold')),
       vscode.window.registerFileDecorationProvider(this),
-      // marker mutations re-tint labels (decorations) and icons (tree items)
-      repo.onDidChange(() => {
-        this.emitter.fire();
-        this.decoEmitter.fire(undefined);
-      }),
+      repo.onDidChange(retint),
+      guideRepo.onDidChange(retint),
+      compositor.onDidChangeHiddenGuideRoles(retint),
     );
   }
 
-  /** Whether any marker intersects the segment's line range ("相交即染"). */
+  /** Whether any marker or visible guide step intersects the segment's line range ("相交即染"). */
   private isMarked(uriString: string, node: DocSegmentNode): boolean {
+    const uri = vscode.Uri.parse(uriString);
     return (
-      markersInLineRange(
-        this.repo.get(vscode.Uri.parse(uriString)),
-        node.startLine,
-        node.endLine,
-      ).length > 0
+      markersInLineRange(this.repo.get(uri), node.startLine, node.endLine).length > 0 ||
+      this.visibleStepsIn(uri, node.startLine, node.endLine).length > 0
+    );
+  }
+
+  /** Guide steps intersecting the range, minus role-filtered ones (hidden everywhere). */
+  private visibleStepsIn(uri: vscode.Uri, startLine: number, endLine: number): GuideStep[] {
+    return stepsInLineRange(this.guideRepo.get(uri), startLine, endLine).filter((s) =>
+      stepVisible(s.role, this.compositor.getHiddenGuideRoles()),
     );
   }
 
@@ -228,15 +243,19 @@ export class SegmentsViewFeature
     }
     // the segment's line range travels in the URI (path `/start-end`, query = doc uri)
     const range = /^\/(\d+)-(\d+)$/.exec(uri.path);
-    const marker = range
-      ? markersInLineRange(
-          this.repo.get(vscode.Uri.parse(uri.query)),
-          Number(range[1]),
-          Number(range[2]),
-        )[0]
-      : undefined;
-    if (marker) {
-      return { color: markerThemeColor(marker.color) }; // marker tint wins over dim
+    if (range) {
+      const docUri = vscode.Uri.parse(uri.query);
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      const marker = markersInLineRange(this.repo.get(docUri), start, end)[0];
+      if (marker) {
+        return { color: markerThemeColor(marker.color) }; // marker tint wins over dim
+      }
+      // AI guide steps tint exactly like manual markers (manual wins on overlap)
+      const step = this.visibleStepsIn(docUri, start, end)[0];
+      if (step) {
+        return { color: guideRoleThemeColor(step.role) };
+      }
     }
     return this.dimmedUris.has(uri.toString()) ? { color: DIM_COLOR } : undefined;
   }

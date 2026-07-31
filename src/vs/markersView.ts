@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Guide, GuideStep } from '../core/guide';
+import { Guide, GuideStep, stepVisible } from '../core/guide';
 import { Marker, markersAtLine } from '../core/markers';
 import { Compositor } from './compositor';
 import type { GuideRepository } from './guideFeature';
@@ -33,6 +33,8 @@ export type MarkersNode = FileNode | MarkerNode | GuideNode | GuideStepNode;
 /**
  * Sidebar list of every marker and guide in the workspace, grouped by file.
  * AI guides sit under their own node — never mixed into the manual markers.
+ * Steps of a role hidden by the guide filter disappear here too — the filter
+ * applies everywhere, not just to editor decorations.
  */
 export class MarkersViewFeature
   implements vscode.TreeDataProvider<MarkersNode>, vscode.Disposable
@@ -45,7 +47,7 @@ export class MarkersViewFeature
   constructor(
     private repo: MarkerRepository,
     private guideRepo: GuideRepository,
-    compositor: Compositor,
+    private compositor: Compositor,
   ) {
     this.view = vscode.window.createTreeView('sightread.markersView', {
       treeDataProvider: this,
@@ -54,6 +56,7 @@ export class MarkersViewFeature
       this.view,
       repo.onDidChange(() => this.emitter.fire()),
       guideRepo.onDidChange(() => this.emitter.fire()),
+      compositor.onDidChangeHiddenGuideRoles(() => this.emitter.fire()),
       vscode.commands.registerCommand('sightread.removeMarker', (node: MarkersNode) => {
         if (node?.kind !== 'marker') {
           return;
@@ -176,9 +179,10 @@ export class MarkersViewFeature
     if (marker) {
       target = { kind: 'marker', uri: doc.uri, marker };
     } else {
+      const hidden = this.compositor.getHiddenGuideRoles();
       for (const guide of this.guideRepo.get(doc.uri)) {
         const index = guide.steps.findIndex(
-          (s) => pos.line >= s.startLine && pos.line <= s.endLine,
+          (s) => pos.line >= s.startLine && pos.line <= s.endLine && stepVisible(s.role, hidden),
         );
         if (index !== -1) {
           target = { kind: 'step', uri: doc.uri, guide, step: guide.steps[index], index };
@@ -221,13 +225,18 @@ export class MarkersViewFeature
       return [...guides, ...markers];
     }
     if (node.kind === 'guide') {
-      return node.guide.steps.map((step, index) => ({
-        kind: 'step' as const,
-        uri: node.uri,
-        guide: node.guide,
-        step,
-        index,
-      }));
+      // index stays the original reading-order position so numbering matches
+      // the editor's step badges (which also skip hidden steps without renumbering)
+      const hidden = this.compositor.getHiddenGuideRoles();
+      return node.guide.steps
+        .map((step, index) => ({
+          kind: 'step' as const,
+          uri: node.uri,
+          guide: node.guide,
+          step,
+          index,
+        }))
+        .filter((n) => stepVisible(n.step.role, hidden));
     }
     return [];
   }

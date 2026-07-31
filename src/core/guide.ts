@@ -76,3 +76,15 @@ export function stepVisible(
 ): boolean {
   return !hiddenRoles.has(roleKey(role));
 }
+
+/** Steps of any guide intersecting [startLine, endLine], ascending by startLine. */
+export function stepsInLineRange(
+  guides: Guide[],
+  startLine: number,
+  endLine: number,
+): GuideStep[] {
+  return guides
+    .flatMap((g) => g.steps)
+    .filter((s) => s.startLine <= endLine && s.endLine >= startLine)
+    .sort((a, b) => a.startLine - b.startLine);
+}

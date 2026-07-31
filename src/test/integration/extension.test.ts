@@ -1,7 +1,9 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import type { Guide } from '../../core/guide';
 import type { Compositor, SpotlightRender } from '../../vs/compositor';
 import type { EntriesViewFeature } from '../../vs/entriesView';
+import type { GuideRepository } from '../../vs/guideFeature';
 import type { MarkerRepository } from '../../vs/highlighter';
 import type { MarkersViewFeature } from '../../vs/markersView';
 import type { SegmentsViewFeature } from '../../vs/segmentsView';
@@ -10,6 +12,7 @@ import type { TrailViewFeature } from '../../vs/trailView';
 interface TestApi {
   _test: {
     repo: MarkerRepository;
+    guideRepo: GuideRepository;
     compositor: Compositor;
     markersView: MarkersViewFeature;
     entriesView: EntriesViewFeature;
@@ -642,6 +645,112 @@ suite('SightRead integration', () => {
       undefined,
       'tint should disappear with the marker',
     );
+  });
+
+  test('a guide step tints the intersecting segment item; hiding its role clears it', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: [
+        'function guided(a) {', // 0
+        '  if (a) {', //           1
+        '    use(a);', //          2
+        '  }', //                  3
+        '',
+        '  return a;', //          5
+        '}', //                    6
+        '',
+      ].join('\n'),
+      language: 'javascript',
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    const view = api._test.segmentsView;
+
+    // poll until the segment tree exists (language service warm-up)
+    let ifSeg;
+    for (let i = 0; i < 100; i++) {
+      const line = 2 + (i % 2) * 3; // alternate 2/5 to refire selection events
+      editor.selection = new vscode.Selection(line, 4, line, 4);
+      await sleep(200);
+      ifSeg = view
+        .getChildren()
+        .find((el) => el.node.startLine <= 2 && 2 <= el.node.endLine);
+      if (ifSeg) {
+        break;
+      }
+    }
+    assert.ok(ifSeg, 'segments view never produced the if segment');
+    const segUri = view.getTreeItem(ifSeg).resourceUri;
+    assert.ok(segUri, 'segment item should carry a decoration URI');
+    assert.strictEqual(view.provideFileDecoration(segUri), undefined, 'untinted before the guide');
+
+    // an AI guide step on one line inside the segment tints it, like a manual marker
+    api._test.guideRepo.set(doc.uri, [
+      {
+        id: 'guide-tint',
+        subject: 'guided',
+        unit: 'function',
+        startLine: 0,
+        endLine: 6,
+        steps: [{ id: 'step-tint', note: 'the branch', role: 'main', startLine: 2, endLine: 2 }],
+      },
+    ]);
+    const deco = view.provideFileDecoration(segUri);
+    assert.ok(deco?.color, 'guide-covered segment label should carry the role color');
+
+    // hiding the step's role removes the tint (the filter applies everywhere)
+    api._test.compositor.setHiddenGuideRoles(new Set(['main']));
+    assert.strictEqual(
+      view.provideFileDecoration(segUri),
+      undefined,
+      'tint should disappear with the hidden role',
+    );
+    api._test.compositor.setHiddenGuideRoles(new Set());
+    api._test.guideRepo.set(doc.uri, []);
+  });
+
+  test('role filter hides filtered steps in the markers view, keeping original numbering', async () => {
+    const api = await getApi();
+    const doc = await vscode.workspace.openTextDocument({
+      content: 'alpha\nbeta\ngamma\n',
+      language: 'plaintext',
+    });
+    const guide: Guide = {
+      id: 'guide-filter',
+      subject: 'demo',
+      unit: 'file',
+      startLine: 0,
+      endLine: 2,
+      steps: [
+        { id: 'step-1', note: 'first', role: 'main', startLine: 0, endLine: 0 },
+        { id: 'step-2', note: 'second', role: 'util', startLine: 1, endLine: 1 },
+      ],
+    };
+    api._test.guideRepo.set(doc.uri, [guide]);
+    const view = api._test.markersView;
+    const fileNode = view
+      .getChildren()
+      .find((n) => n.kind === 'file' && n.uri.toString() === doc.uri.toString());
+    assert.ok(fileNode, 'markers view should list the guided file');
+    const guideNode = view.getChildren(fileNode).find((n) => n.kind === 'guide');
+    assert.ok(guideNode, 'the guide should sit under its file');
+    assert.strictEqual(view.getChildren(guideNode).length, 2);
+
+    api._test.compositor.setHiddenGuideRoles(new Set(['main']));
+    const steps = view.getChildren(guideNode);
+    assert.strictEqual(steps.length, 1, 'the hidden role step should disappear from the view');
+    const only = steps[0];
+    assert.ok(only.kind === 'step', 'remaining node is a step');
+    assert.strictEqual(only.step.id, 'step-2');
+    assert.strictEqual(only.index, 1, 'keeps the original reading-order position');
+    assert.ok(
+      String(view.getTreeItem(only).label).startsWith('2.'),
+      'numbering matches the editor step badges',
+    );
+
+    api._test.compositor.setHiddenGuideRoles(new Set());
+    assert.strictEqual(view.getChildren(guideNode).length, 2, 'clearing the filter restores steps');
+    api._test.guideRepo.set(doc.uri, []);
   });
 
   test('entry points: exported → entry, wrapped → hidden, orphan/top-level-called → suspected', async function () {

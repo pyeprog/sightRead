@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   );
   const spotlight = new SpotlightController();
   const markersView = new MarkersViewFeature(repo, guideRepo, compositor);
-  const segmentsView = new SegmentsViewFeature(repo);
+  const segmentsView = new SegmentsViewFeature(repo, guideRepo, compositor);
   const entriesView = new EntriesViewFeature();
   const trailView = new TrailViewFeature(repo);
   const guideFeature = new GuideFeature(guideRepo, compositor);

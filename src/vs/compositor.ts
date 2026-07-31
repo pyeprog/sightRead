@@ -51,6 +51,9 @@ export class Compositor implements vscode.Disposable {
   private transient = new Map<string, TransientState>();
   /** role keys whose guide steps are not rendered at all (session state) */
   private hiddenGuideRoles: ReadonlySet<string> = new Set();
+  private hiddenRolesEmitter = new vscode.EventEmitter<void>();
+  /** fired by setHiddenGuideRoles — the tree views mirror the filter from it */
+  readonly onDidChangeHiddenGuideRoles = this.hiddenRolesEmitter.event;
 
   constructor(
     private getMarkers: (uri: vscode.Uri) => Marker[],
@@ -140,6 +143,7 @@ export class Compositor implements vscode.Disposable {
 
   setHiddenGuideRoles(hidden: ReadonlySet<string>): void {
     this.hiddenGuideRoles = hidden;
+    this.hiddenRolesEmitter.fire();
   }
 
   getHiddenGuideRoles(): ReadonlySet<string> {
@@ -326,5 +330,6 @@ export class Compositor implements vscode.Disposable {
     this.dimHeavy.dispose();
     this.dimMedium.dispose();
     this.dimLight.dispose();
+    this.hiddenRolesEmitter.dispose();
   }
 }
