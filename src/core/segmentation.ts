@@ -81,6 +81,12 @@ const DECORATOR_RE = /^\s*@[\w.]+(\(|\s*$)/;
 // instead of opening a new unit: closers, else/catch chains, method chains, etc.
 const CONTINUATION_RE =
   /^(\}|\)|\]|\{|\*|\.|:|\?|&&|\|\||else\b|catch\b|finally\b|elif\b|elsif\b|except\b|rescue\b|case\b|default\b|then\b|end\b)/;
+// Structural keywords `classify` names a segment after. A line starting with
+// one of these must not share a segment with the statements around it — the
+// name would be taken from whichever line came first and the rest would go
+// unrendered. Keep in sync with the keyword cases in `classify`.
+const SINGLE_KW_RE =
+  /^(if|unless|for|foreach|while|do|loop|with|using|try|switch|match|select|return|raise|throw|yield|break|continue|pass)\b/;
 
 const DEFINITION_RE =
   /^(?:export\s+)?(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|async\s+)*(def|function|class|fn|func|interface|struct|enum|trait|impl|object|module)[\s*!]+([A-Za-z_$][\w$]*)?/;
@@ -145,6 +151,8 @@ interface Unit {
   blankBefore: boolean;
   /** comment or decorator line — binds to the unit that follows */
   leading: boolean;
+  /** first line opens with a structural keyword — see `SINGLE_KW_RE` */
+  kwLead: boolean;
 }
 
 function groupUnits(lines: string[], info: ScopeInfo): Unit[] {
@@ -171,6 +179,7 @@ function groupUnits(lines: string[], info: ScopeInfo): Unit[] {
         hasBody: false,
         blankBefore: pendingBlank,
         leading: COMMENT_RE.test(lines[i]) || DECORATOR_RE.test(lines[i]),
+        kwLead: SINGLE_KW_RE.test(lines[i].trimStart()),
       });
       pendingBlank = false;
     }
@@ -183,6 +192,8 @@ interface Acc {
   end: number;
   big: boolean;
   leadingOnly: boolean;
+  /** ends on a bodyless keyword statement — nothing may merge in after it */
+  sealed: boolean;
 }
 
 function groupAccs(units: Unit[], opts: SegmentationOptions): Acc[] {
@@ -191,8 +202,11 @@ function groupAccs(units: Unit[], opts: SegmentationOptions): Acc[] {
   for (const u of units) {
     const len = u.end - u.start + 1;
     const isBlock = u.hasBody && len >= opts.minBlockLines && !u.leading;
+    // `if (!x) return;`, `return y;` — a keyword statement with no block of its
+    // own. It stands alone so that `classify` names it after its own line.
+    const sealed = u.kwLead && !u.hasBody && !u.leading;
     if (!cur) {
-      cur = { start: u.start, end: u.end, big: isBlock, leadingOnly: u.leading };
+      cur = { start: u.start, end: u.end, big: isBlock, leadingOnly: u.leading, sealed };
       continue;
     }
     if (cur.leadingOnly && !u.blankBefore) {
@@ -200,11 +214,12 @@ function groupAccs(units: Unit[], opts: SegmentationOptions): Acc[] {
       cur.end = u.end;
       cur.big = isBlock;
       cur.leadingOnly = u.leading;
+      cur.sealed = sealed;
       continue;
     }
-    if (u.blankBefore || isBlock || cur.big) {
+    if (u.blankBefore || isBlock || cur.big || cur.sealed || sealed) {
       accs.push(cur);
-      cur = { start: u.start, end: u.end, big: isBlock, leadingOnly: u.leading };
+      cur = { start: u.start, end: u.end, big: isBlock, leadingOnly: u.leading, sealed };
     } else {
       cur.end = u.end;
       cur.leadingOnly = false;

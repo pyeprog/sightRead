@@ -131,6 +131,30 @@ suite('segmentation: structural naming', () => {
     assert.strictEqual(t[0].name, 'a() c()');
   });
 
+  test('a bodyless keyword statement does not swallow the statements after it', () => {
+    const t = tree(
+      'if (n > 0) push(a);',
+      'const idle = total - used;',
+      "push('b');",
+      'return lines;',
+    );
+    // the two plain statements still merge — only keyword statements stand alone
+    assert.deepStrictEqual(shape(t), [
+      [0, 0, 'branch', 'if', []],
+      [1, 2, 'other', 'idle=.. push(...)', []],
+      [3, 3, 'flow', 'return', []],
+    ]);
+  });
+
+  test('a single-line loop keeps a segment of its own', () => {
+    const t = tree('total = 0', 'for x in xs: total += x', 'avg = total / len(xs)');
+    assert.deepStrictEqual(shape(t), [
+      [0, 0, 'assignment', 'total=..', []],
+      [1, 1, 'loop', 'for', []],
+      [2, 2, 'assignment', 'avg=..', []],
+    ]);
+  });
+
   test('unrecognized statements fall back to raw text, truncated', () => {
     const long = 'x'.repeat(100) + ';';
     const t = tree(long);
