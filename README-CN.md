@@ -19,6 +19,15 @@
 
 <p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
 
+<p align="center">
+  <img src="./media/demo.webp" alt="SightRead">
+</p>
+
+<p align="center">
+  <img src="./media/ai-guidance.webp" alt="AI 辅助阅读演示">
+</p>
+
+
 ## 💭 为什么
 
 <p align="center">
@@ -37,20 +46,11 @@ Idea is cheap, code is even cheaper these days. AI is your tool, not your master
 SightRead强化“人的阅读能力“本身，在你的代码上附上一层视觉辅助（可随时开关），让你像音乐家一样，看到code，逻辑图景就能自然浮现。
 而在v1.4.0之后，我做了一个违背祖宗的决定，增加了AI辅助阅读。但它不是那种把代码嚼碎了喂给你的恶心玩意儿，它只是克制的告诉你哪里该读一读，哪里可以放掉。整个核心仍旧是：“你 理解 代码”。
 
-
 <p align="center">
-  <img src="./media/brain.gif" alt="solennelle">
-</p>
-
-<p align="center">
-  <img src="./media/ai-guidance.webp" alt="solennelle">
+  <img src="./media/brain.gif" alt="a head full of universe">
 </p>
 
 ## ✨ 功能
-
-<p align="center">
-  <img src="./media/demo.webp" alt="demo">
-</p>
 
 一组正交的功能，各自提供不同的视觉辅助（见 design.md §2）：
 

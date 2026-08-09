@@ -19,6 +19,10 @@
 
 <p align="center"><b>English</b> | <a href="README-CN.md">简体中文</a></p>
 
+<p align="center">
+  <img src="./media/demo.webp" alt="SightRead demo">
+</p>
+
 ## 💭 Why
 
 <p align="center">
@@ -38,18 +42,10 @@ SightRead strengthens the *human* ability to read itself, draping a layer of vis
 And in v1.4.0 I made a decision that betrays this very creed: AI-assisted reading is in. But it is not one of those revolting things that chew the code up and feed it into your mouth — it only, with restraint, tells you what deserves a close read and what you can let go. The core is still: **you** understand the code.
 
 <p align="center">
-  <img src="./media/brain.gif" alt="solennelle">
-</p>
-
-<p align="center">
-  <img src="./media/ai-guidance.webp" alt="solennelle">
+  <img src="./media/brain.gif" alt="a head full of universe">
 </p>
 
 ## ✨ Features
-
-<p align="center">
-  <img src="./media/demo.webp" alt="demo">
-</p>
 
 Orthogonal features, each providing a different kind of visual assistance (see design.md §2):
 
@@ -65,6 +61,11 @@ Orthogonal features, each providing a different kind of visual assistance (see d
 - 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
 - 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan, no LLM — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site, functions reached from several callers get a `↗ n callers` badge, and nodes whose body carries a highlighter marker are tinted in the marker's color. The trail lives in memory only and is discarded when the window closes.
 - 🤖 **AI-assisted reading** — this feature hides inside the highlighter, and it is the extension's only optional AI feature. Its design philosophy: signposts only, never a translation of the code. Run `SightRead: Interpret Current (AI)` and the code at the cursor — a function, a class, or the whole file — gets annotated **in place** as role-colored steps: where the main body is, what is setup / fallback / special-case handling, and *why* each core entity exists. It drives a coding-agent CLI (`claude` (Claude Code), `codex` (Codex CLI), `opencode`, `pi`, `cursor-agent`, `aider`, `agy` — auto-detected, custom commands configurable), headless; you log in or configure an API key yourself beforehand. The results hang under the Markers view.
+
+  <p align="center">
+    <img src="./media/ai-guidance.webp" alt="AI-assisted reading demo">
+  </p>
+
 - 🗂️ **Sidebar** — the SightRead activity-bar container holds four views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree), **Markers** (all highlighter marks and AI guides in the workspace) and **Trail** (the call structure you have walked). All four follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
 
 ## ⌨️ Commands

@@ -2,7 +2,16 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
-## [Unreleased]
+## [1.6.3] — 2026-08-09
+
+- **Segment detail text names the dataflow** — the condensed token of an assignment line now shows the call that produced the value (`related=_expand(...)`) instead of a bare `related=..` whenever the right-hand side has one. Keyword pseudo-calls (`if (…)`), operands fed into an operator (`total / len(xs)`) and conditional expressions don't count as the producing call. A segment that both assigns and calls now reads — and is iconed — as an assignment.
+- **Segments view tooltip shows the segment's source** — hovering a segment shows its code as a dedented, syntax-highlighted block (capped at 20 lines) instead of only its first line.
+
+## [1.6.1] — 2026-08-06
+
+- **Fix: one-liner keyword statements are segments of their own** — a bodyless keyword statement (`if (!x) return;`, `return y;`) used to merge into the neighboring segment, which then took its name from whichever line came first while the rest went unlisted. Such a statement now always stands alone, named after its own line.
+
+## [1.6.0] — 2026-07-31
 
 - **Default keybindings (new)** — a `⌘K`-chord family (`Ctrl+K` on Windows/Linux): `⌘K L` choose spotlight level, `⌘K N` mark selection (color + note), `⌘K ⌫` remove the markers the cursor/selection touches, `⌘K G` interpret current (AI), `⌘K [` / `⌘K ]` fold/unfold skeleton — one modifier less than the native recursive-fold chords they sit beside. All five second-keys are unbound in stock VS Code on every platform. Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows every `⌘K` chord while the editor has focus — rebind Cursor's `⌘K` to use these there.
 - **AI interpret shows elapsed time** — the progress notification ticks `Ns / 180s` while the harness runs, for every harness profile.
@@ -21,6 +30,21 @@ All notable changes to the SightRead extension are documented in this file.
 - **Agent harnesses** — the AI runs through the coding-agent CLI you already have, headless, on your existing subscription (no API key): builtin profiles for `claude`, `codex`, `opencode`, `pi`, `cursor-agent`, `aider` and `agy`, auto-detected in market-share order (`sightread.guide.harness`), with custom or overriding profiles via `sightread.guide.customHarnesses`. The interpreted source is sent to the CLI you choose — and nowhere else.
 - **Prompt control** — per-unit instruction templates (`sightread.guide.promptTemplate.function/.class/.file`), a per-run focus input on invocation, and a note-language setting (`sightread.guide.language`); the JSON output contract is always appended by SightRead and cannot be overridden.
 - **Markers view** — title-bar buttons reordered: favorite-color mark, color+note mark, AI interpret, clear; guide steps carry role-colored icons. `Remove All Markers & Guides (Workspace)` clears AI guides together with markers; the finer-grained removal commands (selection / function / file) keep touching only manual markers.
+
+## [1.3.5] — 2026-07-17
+
+- **Spotlight level is chosen, not cycled** — the 👁 status-bar item (and the Segments-view button) now opens a level picker instead of blindly cycling Off → Seg+Var → Seg → Fn. `SightRead: Choose Spotlight Level…` does the same from the palette, and each level gets a direct command: `Spotlight: Focus Current Function` / `Focus Current Segment` / `Focus Segment + Variable Uses` / `Off`.
+- **Shorter menu titles** — the editor right-click SightRead submenu uses compact titles.
+
+## [1.3.0] — 2026-07-14
+
+- **Trail (new)** — a sidebar view that turns your navigation into a call map while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan, no LLM — only the structural jumps you actually make are recorded, each verified against the definition provider, so the structure emerges as you read. Children are ordered by call site, functions reached from several callers get a `↗ n callers` badge, and nodes whose body carries a highlighter marker are tinted in the marker's color. Ships with `Pin Current Function to Trail`, `Pause Trail Recording` / `Resume Trail Recording` and `Clear Trail`; the trail lives in memory only and is discarded when the window closes.
+
+## [1.2.0] — 2026-07-14
+
+- **Marker commands reworked** — `Mark Selection (Favorite Color)` marks in one click using the new `sightread.marker.favoriteColor` setting; `Mark Selection (Pick Color)…` and `Mark Selection (Color + Note)…` replace the fixed yellow / red / green commands.
+- **Mark segments from the Segments view** — `Mark Segment (Pick Color)…`, `Mark Segment (Color + Note)…` and `Remove Markers in Segment` on a segment's context menu, covering exactly the segment's line range.
+- **Edit notes from the Markers view** — an Add/Edit Note action directly on a marker item.
 
 ## [1.1.0] — 2026-07-09
 
