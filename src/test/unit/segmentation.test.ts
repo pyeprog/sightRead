@@ -31,7 +31,7 @@ suite('segmentation: structural naming', () => {
     const t = tree('// prepare buffers', 'const buf = alloc();');
     assert.strictEqual(t.length, 1);
     assert.deepStrictEqual([t[0].startLine, t[0].endLine], [0, 1]);
-    assert.strictEqual(t[0].name, 'buf=..');
+    assert.strictEqual(t[0].name, 'buf=alloc()');
     assert.strictEqual(t[0].kind, 'assignment');
   });
 
@@ -110,6 +110,52 @@ suite('segmentation: structural naming', () => {
     assert.deepStrictEqual(t[0].children, []);
   });
 
+  test('assignment from a call names the dataflow edge', () => {
+    const t = tree('const fresh = self._sift_pool(candidates, rows);');
+    assert.strictEqual(t[0].name, 'fresh=_sift_pool(...)');
+    assert.strictEqual(t[0].kind, 'assignment');
+  });
+
+  test('multi-target assignment joins its names on the edge', () => {
+    const t = tree('related, seed_rows = self._expand(seeds)');
+    assert.strictEqual(t[0].name, 'related,seed_rows=_expand(...)');
+  });
+
+  test('a call inside a comprehension is still the verb', () => {
+    const t = tree('candidates = [c for c in self._aggregate(related) if c.mid not in seen]');
+    assert.strictEqual(t[0].name, 'candidates=_aggregate(...)');
+  });
+
+  test('a conditional right-hand side falls back to the bare name', () => {
+    const js = tree('const key = fn ? makeKey(fn) : undefined;');
+    assert.strictEqual(js[0].name, 'key=..');
+    const py = tree('key = make_key(fn) if fn else None');
+    assert.strictEqual(py[0].name, 'key=..');
+  });
+
+  test('calls inside string literals are not verbs', () => {
+    const t = tree('const id = `${el.uriString}:${node.startLine.toString()}`;');
+    assert.strictEqual(t[0].name, 'id=..');
+  });
+
+  test('an operand call behind an operator is not the verb', () => {
+    const t = tree('avg = total / len(xs)');
+    assert.strictEqual(t[0].name, 'avg=..');
+  });
+
+  test('dotted callee paths keep their last two segments, self/this dropped', () => {
+    const t = tree('const doc = vscode.workspace.textDocuments.find(match);');
+    assert.strictEqual(t[0].name, 'doc=textDocuments.find(...)');
+    const py = tree('rows = self.db.cursor.fetchall()');
+    assert.strictEqual(py[0].name, 'rows=cursor.fetchall()');
+  });
+
+  test('a segment mixing assignments and bare calls stays an assignment', () => {
+    const t = tree('fresh = self._sift(pool)', 'self._trace(fresh)');
+    assert.strictEqual(t[0].name, 'fresh=_sift(...) _trace(...)');
+    assert.strictEqual(t[0].kind, 'assignment');
+  });
+
   test('summary tokens are capped with an ellipsis', () => {
     const t = tree('a = 1', 'b = 2', 'c = 3', 'd = 4', 'e = 5');
     assert.strictEqual(t[0].name, 'a=.. b=.. c=.. d=.. …');
@@ -141,7 +187,7 @@ suite('segmentation: structural naming', () => {
     // the two plain statements still merge — only keyword statements stand alone
     assert.deepStrictEqual(shape(t), [
       [0, 0, 'branch', 'if', []],
-      [1, 2, 'other', 'idle=.. push(...)', []],
+      [1, 2, 'assignment', 'idle=.. push(...)', []],
       [3, 3, 'flow', 'return', []],
     ]);
   });

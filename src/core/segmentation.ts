@@ -13,7 +13,8 @@
  *   - loops:        `for` / `while`
  *   - try:          `try/except/finally`
  *   - definitions:  `def foo` / `class Bar` (whatever keyword the language uses)
- *   - assignments:  `a=.. b=..`
+ *   - assignments:  `related=_expand(...)` (the producing call, when the
+ *                   right-hand side has one) / `a=.. b=..` (call-free)
  *   - calls:        `shutil.rmtree(...)` / `path.unlink()`
  *   - flow:         `return` / `raise`
  * Keyword nodes carry their condensed header expression in `detail` instead,
@@ -443,27 +444,33 @@ function tryName(top: string[]): string {
   return parts.join('/');
 }
 
-/** `a=.. b=.. shutil.rmtree(...) …` built from assignment/call shapes. */
+/** `related,seed_rows=_expand(...) _trace(...) …` — one token per top-level
+ *  line. Each token is a dataflow edge: the names produced and the call that
+ *  produced them. A call-free assignment keeps the bare `a=..` form, a bare
+ *  call keeps its callee. */
 function statementSummary(top: string[], opts: SegmentationOptions): Summary {
   const tokens: string[] = [];
   let assigns = 0;
-  let calls = 0;
   for (const t of top) {
     if (tokens.length > opts.maxSummaryTokens) {
       break;
     }
     const names = matchAssignment(t);
     if (names) {
-      for (const n of names) {
-        tokens.push(`${n}=..`);
+      const call = findCall(stripLhs(t));
+      if (call) {
+        tokens.push(`${names.join(',')}=${call}`);
+      } else {
+        for (const n of names) {
+          tokens.push(`${n}=..`);
+        }
       }
       assigns++;
       continue;
     }
-    const call = matchCall(t);
+    const call = findCall(t);
     if (call) {
       tokens.push(call);
-      calls++;
     }
   }
   if (tokens.length === 0) {
@@ -473,27 +480,86 @@ function statementSummary(top: string[], opts: SegmentationOptions): Summary {
     tokens.length > opts.maxSummaryTokens
       ? tokens.slice(0, opts.maxSummaryTokens).join(' ') + ' …'
       : tokens.join(' ');
-  const kind: SegmentKind =
-    assigns > 0 && calls === 0 ? 'assignment' : calls > 0 && assigns === 0 ? 'call' : 'other';
+  // a segment that assigns reads as producing values, even when it also calls
+  const kind: SegmentKind = assigns > 0 ? 'assignment' : 'call';
   return { kind, name };
 }
 
+const ASSIGNMENT_RE =
+  /^(?:(?:const|let|var|final|local|global|nonlocal|my|our)\s+)?([A-Za-z_$][\w$.]*(?:\[[^\]]*\])?(?:\s*,\s*[A-Za-z_$][\w$.]*(?:\[[^\]]*\])?)*)\s*(?::\s*[^=]+?)?\s*(?:[-+*/%&|^]|<<|>>|\*\*|\/\/|\?\?)?=(?![=>])/;
+
 function matchAssignment(t: string): string[] | undefined {
-  const m = t.match(
-    /^(?:(?:const|let|var|final|local|global|nonlocal|my|our)\s+)?([A-Za-z_$][\w$.]*(?:\[[^\]]*\])?(?:\s*,\s*[A-Za-z_$][\w$.]*(?:\[[^\]]*\])?)*)\s*(?::\s*[^=]+?)?\s*(?:[-+*/%&|^]|<<|>>|\*\*|\/\/|\?\?)?=(?![=>])/,
-  );
+  const m = t.match(ASSIGNMENT_RE);
   if (!m) {
     return undefined;
   }
   return m[1].split(',').map((s) => s.trim());
 }
 
-function matchCall(t: string): string | undefined {
-  const m = t.match(/^(?:await\s+|yield\s+|new\s+)?([A-Za-z_$][\w$.]*)\s*\(\s*(\))?/);
-  if (!m) {
+/** Drops the `a, b =` prefix so call detection starts at the right-hand side. */
+function stripLhs(t: string): string {
+  const m = t.match(ASSIGNMENT_RE);
+  return m ? t.slice(m[0].length) : t;
+}
+
+/** Keywords that read like a call when followed by `(` but name no operation. */
+const NON_CALL_WORDS = new Set([
+  'if', 'unless', 'elif', 'elsif', 'else', 'for', 'foreach', 'while', 'switch',
+  'match', 'case', 'when', 'catch', 'except', 'in', 'and', 'or', 'not',
+  'return', 'yield', 'await', 'new', 'typeof', 'lambda', 'function',
+]);
+
+/** An operator right before the call demotes it to an operand: `total / len(xs)`. */
+const PRECEDING_OPERATOR_RE = /[+\-*/%<>&|^~!?:=]\s*$/;
+
+/**
+ * First call anywhere in the expression (string literals masked out first),
+ * skipping keyword pseudo-calls and operator-fed operands. A conditional
+ * expression yields nothing — its branches disagree on what the verb is.
+ */
+function findCall(raw: string): string | undefined {
+  const expr = raw.replace(STRING_LITERAL_RE, "''");
+  if (isConditional(expr)) {
     return undefined;
   }
-  return m[2] ? `${m[1]}()` : `${m[1]}(...)`;
+  const re = /([A-Za-z_$][\w$.]*)\s*\(\s*(\))?/g;
+  for (let m = re.exec(expr); m; m = re.exec(expr)) {
+    const path = m[1];
+    if (NON_CALL_WORDS.has(path.split('.')[0])) {
+      continue;
+    }
+    if (PRECEDING_OPERATOR_RE.test(expr.slice(0, m.index))) {
+      continue;
+    }
+    return `${shortenPath(path)}${m[2] ? '()' : '(...)'}`;
+  }
+  return undefined;
+}
+
+/** Top-level ternary / Python `x if c else y`; `?.` and `??` are not ternaries. */
+function isConditional(expr: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (ch === '(' || ch === '[' || ch === '{') {
+      depth++;
+    } else if (ch === ')' || ch === ']' || ch === '}') {
+      depth--;
+    } else if (depth === 0 && ch === '?') {
+      if (expr[i + 1] === '.' || expr[i + 1] === '?') {
+        i++;
+        continue;
+      }
+      return true;
+    }
+  }
+  return / if .+ else /.test(expr);
+}
+
+/** `vscode.workspace.textDocuments.find` → `textDocuments.find`; `self._gate` → `_gate`. */
+function shortenPath(path: string): string {
+  const parts = path.split('.').filter((p) => p !== 'self' && p !== 'this' && p !== 'cls');
+  return parts.slice(-2).join('.') || path;
 }
 
 function truncate(s: string, maxLength: number): string {

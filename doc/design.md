@@ -67,8 +67,8 @@
   - 分支：`if ...` / `if ... else ...` / `if ... elif{3} ... else ...`（关键字取语言实际所用，如 JS 的 `else if`）
   - 循环 `for ...`/`while ...`，上下文 `with ...`，异常 `try ... except ... finally ...`，分派 `switch ...`/`match ...`
   - 定义：`def foo` / `class Bar` / `function baz`（语言关键字 + 名字）
-  - 赋值段：`a=.. b=.. c=..`（最多 4 个 token，超出加 `…`）
-  - 调用段：`shutil.rmtree(...)`，无参写 `path.unlink()`
+  - 赋值段（2026-08-09 第二版，数据流边）：右值含调用时 `related=_expand(...)`——产物与产生它的操作同显，流水线函数因此可读；右值无调用（字面量、多行右值、三元条件）退回 `a=..`。每行一个 token，最多 4 个，超出加 `…`。调用路径去 `self`/`this` 并只留最后两段（`vscode.workspace.textDocuments.find` → `textDocuments.find`）；运算符后面的调用视为操作数不取（`total / len(xs)` → `avg=..`）。段内含赋值即为 assignment kind（图标不随右值出现调用漂移）。
+  - 调用段：`shutil.rmtree(...)`，无参写 `path.unlink()`（同样去 self/裁路径）
   - 流控制：`return ...` / `raise ...`
   - 均无法识别时退化为首行代码文本（截断 60 字符）。
 - 垃圾代码退化为"整个函数一段"，无害。

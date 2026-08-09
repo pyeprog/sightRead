@@ -52,6 +52,25 @@ function segmentUri(uriString: string, node: DocSegmentNode): vscode.Uri {
 
 const DIM_COLOR = new vscode.ThemeColor('list.deemphasizedForeground');
 
+const TOOLTIP_MAX_LINES = 20;
+
+/** Full segment source (dedented, line-capped) — the overflow channel for
+ *  whatever the one-line label could not carry. */
+function segmentTooltip(doc: vscode.TextDocument, node: DocSegmentNode): vscode.MarkdownString {
+  const lastLine = Math.min(node.endLine, doc.lineCount - 1);
+  const capped = Math.min(lastLine, node.startLine + TOOLTIP_MAX_LINES - 1);
+  const lines: string[] = [];
+  for (let i = node.startLine; i <= capped; i++) {
+    lines.push(doc.lineAt(i).text);
+  }
+  const indents = lines
+    .filter((l) => l.trim() !== '')
+    .map((l) => l.length - l.trimStart().length);
+  const cut = indents.length > 0 ? Math.min(...indents) : 0;
+  const text = lines.map((l) => l.slice(cut)).join('\n') + (capped < lastLine ? '\n…' : '');
+  return new vscode.MarkdownString().appendCodeblock(text, doc.languageId);
+}
+
 /**
  * Sidebar tree of the current function's segments, updated by the cursor
  * pipeline. This replaces the abandoned Outline injection: providing document
@@ -299,7 +318,7 @@ export class SegmentsViewFeature
       (d) => d.uri.toString() === el.uriString,
     );
     if (doc && el.node.startLine < doc.lineCount) {
-      item.tooltip = doc.lineAt(el.node.startLine).text.trim();
+      item.tooltip = segmentTooltip(doc, el.node);
     }
     item.command = {
       command: 'sightread.revealLocation',
