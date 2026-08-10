@@ -10,6 +10,7 @@ import { parseGuideResponse } from '../core/guideParse';
 import { SubjectContext, buildGuidePrompt } from '../core/guidePrompt';
 import { BUILTIN_HARNESSES, HarnessProfile, resolveHarness } from '../core/harness';
 import { EditChange } from '../core/markers';
+import { recordDuration, typicalMs } from '../core/runStats';
 import { autoDetectionOrder, pickHarness } from './agentCli';
 import { Compositor } from './compositor';
 import { linePreview } from './highlighter';
@@ -19,6 +20,8 @@ import type { GuideNode } from './markersView';
 import { InterpretTarget, resolveInterpretTarget } from './symbols';
 
 const RUN_TIMEOUT_MS = 180_000;
+/** globalState key: harness/unit → recent successful run durations (ms) */
+const DURATIONS_KEY = 'sightread.guide.runDurations';
 /** argv-size / token-cost guards for the one-shot prompt */
 const MAX_UNIT_LINES: Record<InterpretUnit, number> = { function: 1200, class: 1200, file: 2000 };
 const MAX_HEADER_LINES = 40;
@@ -124,6 +127,8 @@ export class GuideFeature implements vscode.Disposable {
   constructor(
     private repo: GuideRepository,
     private compositor: Compositor,
+    /** globalState — typical durations belong to the machine's harness, not the workspace */
+    private stats: vscode.Memento,
   ) {
     this.subscriptions.push(
       vscode.commands.registerCommand('sightread.interpretFunction', () =>
@@ -182,7 +187,13 @@ export class GuideFeature implements vscode.Disposable {
     const cwd =
       vscode.workspace.getWorkspaceFolder(doc.uri)?.uri.fsPath ?? path.dirname(doc.uri.fsPath);
 
+    const durations = this.stats.get<Record<string, number[]>>(DURATIONS_KEY, {});
+    const statsKey = `${runner.name}/${target.unit}`;
+    const typical = typicalMs(durations[statsKey] ?? []);
+    const typicalS = typical === undefined ? undefined : Math.round(typical / 1000);
+
     let raw: string;
+    const startMs = Date.now();
     try {
       raw = await vscode.window.withProgress(
         {
@@ -194,12 +205,13 @@ export class GuideFeature implements vscode.Disposable {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
           // the harness is silent until it finishes — an elapsed/limit tick is
-          // the "still alive" signal
-          const startMs = Date.now();
+          // the "still alive" signal; the typical figure says whether the
+          // current wait is normal
           const limitS = Math.round(RUN_TIMEOUT_MS / 1000);
+          const typicalNote = typicalS === undefined ? '' : ` (typically ~${typicalS}s)`;
           const ticker = setInterval(() => {
             const elapsedS = Math.round((Date.now() - startMs) / 1000);
-            progress.report({ message: `${elapsedS}s / ${limitS}s` });
+            progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
           }, 1000);
           return runner
             .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal })
@@ -213,6 +225,10 @@ export class GuideFeature implements vscode.Disposable {
       }
       return;
     }
+    void this.stats.update(DURATIONS_KEY, {
+      ...durations,
+      [statsKey]: recordDuration(durations[statsKey] ?? [], Date.now() - startMs),
+    });
 
     const parsed = parseGuideResponse(
       {
