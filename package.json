@@ -260,6 +260,11 @@
         "title": "Clear Routes",
         "category": "SightRead",
         "icon": "$(discard)"
+      },
+      {
+        "command": "sightread.trailGoToCaller",
+        "title": "Go to Caller Site",
+        "category": "SightRead"
       }
     ],
     "keybindings": [
@@ -476,6 +481,10 @@
           "when": "false"
         },
         {
+          "command": "sightread.trailGoToCaller",
+          "when": "false"
+        },
+        {
           "command": "sightread.trailPause",
           "when": "!sightread.trailPaused"
         },
@@ -611,6 +620,11 @@
           "command": "sightread.trailRemove",
           "when": "view == sightread.trailView && viewItem == trailNode",
           "group": "inline"
+        },
+        {
+          "command": "sightread.trailGoToCaller",
+          "when": "view == sightread.trailView && viewItem == trailNode",
+          "group": "1_nav@1"
         }
       ],
       "editor/context": [
@@ -802,17 +816,12 @@
         "sightread.guide.harness": {
           "type": "string",
           "default": "auto",
-          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `devin`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
+          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
         },
         "sightread.guide.customHarnesses": {
           "type": "object",
           "default": {},
           "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `exploreArgs` — argument array for read-only repository exploration; declaring it enables route planning *(optional)*\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
-        },
-        "sightread.guide.model": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Model for AI runs, appended to every harness invocation as `--model <value>` — the one flag all builtin harnesses share. The value's vocabulary belongs to the chosen harness: `claude` takes `sonnet` / `opus` / a full model id, `opencode` and `pi` take `provider/model`, `agy` takes a model slug and fails loudly on unknown ones. Empty = each CLI's own default model (the progress notification then shows `default model`)."
         },
         "sightread.guide.language": {
           "type": "string",

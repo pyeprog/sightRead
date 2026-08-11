@@ -30,6 +30,9 @@ const ROUTE_TYPICAL_PRIOR_MS = 120_000;
  */
 export class RouteFeature implements vscode.Disposable {
   private subscriptions: vscode.Disposable[] = [];
+  /** silent run log: raw responses plus every dropped/re-rooted/fallback hop —
+   *  the only way to tell a bad AI answer from a good one we mangled */
+  private channel = vscode.window.createOutputChannel('SightRead');
 
   constructor(
     private trail: TrailViewFeature,
@@ -37,6 +40,7 @@ export class RouteFeature implements vscode.Disposable {
     private stats: vscode.Memento,
   ) {
     this.subscriptions.push(
+      this.channel,
       vscode.commands.registerCommand('sightread.planRoute', () => this.planRoute()),
       vscode.commands.registerCommand('sightread.traceEntries', () => this.traceEntries()),
     );
@@ -147,9 +151,6 @@ export class RouteFeature implements vscode.Disposable {
     const typicalS = Math.round(
       typicalMs(durations[statsKey] ?? [], ROUTE_TYPICAL_PRIOR_MS) / 1000,
     );
-    const model =
-      vscode.workspace.getConfiguration('sightread').get<string>('guide.model', '').trim() ||
-      undefined;
 
     let raw: string;
     const startMs = Date.now();
@@ -157,18 +158,19 @@ export class RouteFeature implements vscode.Disposable {
       raw = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          // the title names the model so an unset setting is visible as such
-          title: `SightRead: planning a route via ${runner.name}${model ? ` · ${model}` : ' (default model)'}…`,
+          title: `SightRead: planning a route via ${runner.name}`,
           cancellable: true,
         },
         (progress, token) => {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
           const limitS = Math.round(ROUTE_TIMEOUT_MS / 1000);
-          const typicalNote = ` (typically ~${typicalS}s)`;
+          // constant text first, the growing counter last — a changing prefix
+          // makes the notification re-wrap and the whole line jitter
+          const prefix = `typically ~${typicalS}s · limit ${limitS}s · elapsed `;
           const ticker = setInterval(() => {
             const elapsedS = Math.round((Date.now() - startMs) / 1000);
-            progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
+            progress.report({ message: `${prefix}${elapsedS}s` });
           }, 1000);
           return runner
             .run({
@@ -177,7 +179,6 @@ export class RouteFeature implements vscode.Disposable {
               timeoutMs: ROUTE_TIMEOUT_MS,
               signal: abort.signal,
               explore: true,
-              model,
             })
             .finally(() => clearInterval(ticker));
         },
@@ -194,11 +195,22 @@ export class RouteFeature implements vscode.Disposable {
       [statsKey]: recordDuration(durations[statsKey] ?? [], Date.now() - startMs),
     });
 
+    this.channel.appendLine(
+      `\n[${new Date().toISOString()}] ${statsUnit} via ${runner.name}: ${label}`,
+    );
+    this.channel.appendLine('--- raw response ---');
+    this.channel.appendLine(raw.trim());
+    this.channel.appendLine('--- end raw response ---');
+
     const parsed = parseRouteResponse(raw);
     if (!parsed.ok) {
+      this.channel.appendLine(`parse: no route — ${parsed.error}`);
       // covers the contract's no-route escape, where the error is the agent's summary
       void vscode.window.showWarningMessage(`SightRead: no route — ${parsed.error}`);
       return;
+    }
+    for (const d of parsed.route.dropped) {
+      this.channel.appendLine(`parse: ${d}`);
     }
     const inputs = await this.resolveHops(parsed.route.hops, root);
     if (inputs.length === 0) {
@@ -241,6 +253,7 @@ export class RouteFeature implements vscode.Disposable {
         calledFrom,
         callsiteLine: calledFrom === undefined ? undefined : hops[i].callsiteLine,
         note: hops[i].note,
+        core: hops[i].core,
       });
     });
     return out;
@@ -248,12 +261,18 @@ export class RouteFeature implements vscode.Disposable {
 
   private async hopNode(hop: RouteHop, root: vscode.Uri): Promise<TrailNodeInput | undefined> {
     if (path.isAbsolute(hop.file) || hop.file.split(/[\\/]/).includes('..')) {
+      this.channel.appendLine(
+        `resolve: hop "${hop.symbol}" dropped: path escapes the workspace (${hop.file})`,
+      );
       return undefined; // the agent must stay inside the workspace
     }
     let doc: vscode.TextDocument;
     try {
       doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(root, hop.file));
     } catch (_e) {
+      this.channel.appendLine(
+        `resolve: hop "${hop.symbol}" dropped: cannot open ${hop.file}`,
+      );
       return undefined;
     }
     const uriString = doc.uri.toString();
@@ -274,6 +293,9 @@ export class RouteFeature implements vscode.Disposable {
     }
     // fall back to the AI's line hint; the node lights up only if a real walk
     // produces the same key — otherwise it stays dim until Clear Routes
+    this.channel.appendLine(
+      `resolve: symbol "${hop.symbol}" not found in ${hop.file} — using the AI line hint`,
+    );
     const line = Math.min(hop.line ?? 0, Math.max(0, doc.lineCount - 1));
     return {
       key: trailNodeKey(uriString, hop.symbol, hop.containerName),

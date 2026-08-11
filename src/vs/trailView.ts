@@ -46,8 +46,6 @@ const KIND_ICONS: Record<TrailNodeKind, string> = {
   module: 'symbol-file',
 };
 
-/** route-step badges; steps past the hop cap render as `#n` */
-const ROUTE_BADGES = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫'];
 
 /** A settled cursor state, fed by the extension's cursor pipeline. */
 export interface TrailSettled {
@@ -73,8 +71,6 @@ export interface TrailElement {
   recursive: boolean;
   /** earliest known call-site line in the parent (absent on roots) */
   callsiteLine?: number;
-  /** reached through a seeded, not-yet-walked edge — rendered dim */
-  plannedEdge?: boolean;
 }
 
 export function trailKind(kind: vscode.SymbolKind): TrailNodeKind {
@@ -206,7 +202,7 @@ export class TrailViewFeature
       vscode.window.registerFileDecorationProvider(this),
       this.repo.onDidChange(() => this.decoEmitter.fire(undefined)),
       vscode.window.onDidChangeTextEditorSelection((e) => this.onRawSelection(e)),
-      this.view.onDidChangeSelection(() => this.updateRouteMessage()),
+      this.view.onDidChangeSelection(() => this.refreshHeader()),
     );
     void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', false);
   }
@@ -279,8 +275,15 @@ export class TrailViewFeature
     // arriving inside a known node keeps the view following the reader
     const here = this.graph.nodeAt(curr.uriString, curr.line);
     if (here) {
+      const wasPlanned = here.planned;
       this.graph.touch(here.key);
-      void this.revealNode(here.key);
+      if (wasPlanned) {
+        // arriving by a view click converts the node — repaint now, don't
+        // wait for a future edge to fire the tree
+        this.fireSoon(here.key);
+      } else {
+        void this.revealNode(here.key);
+      }
     }
     if (!prev) {
       await this.tryRawDrillIn(curr, gen);
@@ -472,7 +475,7 @@ export class TrailViewFeature
 
   setPaused(paused: boolean): void {
     this.paused = paused;
-    this.view.description = paused ? 'paused' : undefined;
+    this.refreshHeader();
     void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', paused);
     if (paused) {
       this.pending = [];
@@ -483,7 +486,7 @@ export class TrailViewFeature
     this.generation++;
     this.graph.clear();
     this.pendingReveal = undefined;
-    this.view.message = undefined;
+    this.refreshHeader();
     this.fireSoon();
   }
 
@@ -497,13 +500,13 @@ export class TrailViewFeature
     this.emitter.fire();
     this.decoEmitter.fire(undefined);
     await this.expandRoute(hops);
-    this.view.message = `Route: ${label}`;
+    this.refreshHeader(`Route: ${label}`);
   }
 
   /** Removes all still-planned route elements and their badges. */
   clearRoutes(): void {
     this.graph.clearPlanned();
-    this.view.message = undefined;
+    this.refreshHeader();
     this.fireSoon();
   }
 
@@ -561,11 +564,23 @@ export class TrailViewFeature
     }
   }
 
-  /** Selection-driven header: the selected node's route label, if any. */
-  private updateRouteMessage(): void {
+  /**
+   * The single header line above the tree (TreeView.message): pause state
+   * plus the selected node's route label. One home for all trail status —
+   * view.description stays unused.
+   */
+  private refreshHeader(routeFallback?: string): void {
     const key = this.view.selection[0]?.key;
     const route = key === undefined ? undefined : this.graph.routeOf(key);
-    this.view.message = route ? `Route: ${route.label}` : undefined;
+    const parts: string[] = [];
+    if (this.paused) {
+      parts.push('⏸ paused');
+    }
+    const routeText = route ? `Route: ${route.label}` : routeFallback;
+    if (routeText) {
+      parts.push(routeText);
+    }
+    this.view.message = parts.length > 0 ? parts.join(' · ') : undefined;
   }
 
   /** Explicit recall fallback: seed the current function (or module) as a root. */
@@ -597,6 +612,22 @@ export class TrailViewFeature
     this.fireSoon();
   }
 
+  /** Jumps to the line in the caller (the parent node) where this occurrence is called. */
+  goToCallerSite(el?: TrailElement): void {
+    if (!el || el.callsiteLine === undefined || el.path.length === 0) {
+      return;
+    }
+    const caller = this.graph.node(el.path[el.path.length - 1]);
+    if (!caller) {
+      return;
+    }
+    void vscode.commands.executeCommand(
+      'sightread.revealLocation',
+      caller.uriString,
+      el.callsiteLine,
+    );
+  }
+
   getTreeItem(el: TrailElement): vscode.TreeItem {
     const node = this.graph.node(el.key);
     if (!node) {
@@ -613,34 +644,32 @@ export class TrailViewFeature
     );
     item.id = [...el.path, el.key].join('→');
     item.contextValue = 'trailNode';
-    // a planned node — or a walked node reached through a not-yet-walked
-    // seeded edge — renders dim at this occurrence
-    const dim = node.planned || el.plannedEdge === true;
+    // dim follows the NODE alone: clicking an item converts it and must
+    // light it up — keeping an occurrence dim for its unwalked edge reads
+    // as "the click did nothing"
+    const dim = node.planned;
     item.iconPath = dim
       ? new vscode.ThemeIcon(KIND_ICONS[node.kind], new vscode.ThemeColor('disabledForeground'))
       : new vscode.ThemeIcon(KIND_ICONS[node.kind]);
-    const badge =
-      node.routeStep === undefined
-        ? undefined
-        : (ROUTE_BADGES[node.routeStep - 1] ?? `#${node.routeStep}`);
-    const callers = this.graph.inDegree(el.key);
+    // description = ★ (the route's core hops) + ↻ + the call site in the
+    // caller — the one location a click cannot reach (clicking goes to the
+    // definition), so it must be visible here
     const parts: string[] = [];
-    if (badge) {
-      parts.push(badge);
+    if (node.routeCore) {
+      parts.push('★');
     }
     if (el.recursive) {
       parts.push('↻');
     }
-    if (callers >= 2) {
-      parts.push(`↗ ${callers} callers`);
+    if (el.callsiteLine !== undefined) {
+      parts.push(`↙ line ${el.callsiteLine + 1}`);
     }
     item.description = parts.join(' · ');
     item.resourceUri = trailUri(node, dim); // markers tint the label (importance is human judgment)
     const rel = vscode.workspace.asRelativePath(vscode.Uri.parse(node.uriString), false);
     item.tooltip =
       `${rel}:${node.line + 1}` +
-      (el.callsiteLine !== undefined ? `\ncalled at line ${el.callsiteLine + 1}` : '') +
-      (badge && node.routeNote ? `\nroute ${badge}: ${node.routeNote}` : '') +
+      (node.routeNote ? `\nroute${node.routeCore ? ' ★' : ''}: ${node.routeNote}` : '') +
       (dim ? '\nplanned — not visited yet' : '') +
       (el.recursive ? '\nrecursive — already on this path' : '');
     item.command = {
@@ -664,7 +693,6 @@ export class TrailViewFeature
       path,
       recursive: path.includes(c.node.key),
       callsiteLine: c.callsiteLine === UNKNOWN_CALLSITE ? undefined : c.callsiteLine,
-      plannedEdge: c.planned || undefined,
     }));
   }
 
@@ -741,5 +769,8 @@ export function registerTrailCommands(
       trail.removeElement(el),
     ),
     vscode.commands.registerCommand('sightread.routeClear', () => trail.clearRoutes()),
+    vscode.commands.registerCommand('sightread.trailGoToCaller', (el?: TrailElement) =>
+      trail.goToCallerSite(el),
+    ),
   );
 }

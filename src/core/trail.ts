@@ -40,11 +40,8 @@ export interface TrailNode extends TrailNodeInput {
   planned: boolean;
   /** membership in an AI route; overlapping routes — the latest wins */
   routeId?: string;
-  /**
-   * 1-based pre-order position within its route (children ordered by
-   * call-site line) — computed by seedRoute, never the AI's list order
-   */
-  routeStep?: number;
+  /** what the reader is after — scenario A: the meat of the goal; B: an entry */
+  routeCore?: boolean;
   /** the AI's why-note for this hop — tooltip only */
   routeNote?: string;
 }
@@ -76,12 +73,15 @@ export interface RouteHopInput {
   callsiteLine?: number;
   /** the AI's why-note */
   note?: string;
+  /** scenario A: the meat of the goal; scenario B: an entry — rendered ★ */
+  core?: boolean;
 }
 
 /**
- * Pre-order step numbers derived from the hops' calledFrom structure —
- * children ordered by call-site line, roots by input index (determinism
- * only, no reading-order claim). Guards against malformed cycles.
+ * Pre-order positions derived from the hops' calledFrom structure — children
+ * ordered by call-site line, roots by input index. Purely a creation-order
+ * device so a route's roots display first-hop-on-top; never shown to the
+ * reader. Guards against malformed cycles.
  */
 function routeSteps(hops: RouteHopInput[]): number[] {
   const children = new Map<number, number[]>();
@@ -285,7 +285,11 @@ export class TrailGraph {
     const route: RouteInfo = { id: `route-${++this.routeCounter}`, label };
     this.routes.set(route.id, route);
     const steps = routeSteps(hops);
-    hops.forEach((hop, i) => {
+    // create in descending step order: the first hop lands the highest seq,
+    // so roots() (newest first) shows a route's roots in step order
+    const byStepDesc = [...hops.keys()].sort((a, b) => steps[b] - steps[a]);
+    for (const i of byStepDesc) {
+      const hop = hops[i];
       const existing = this.nodes.get(hop.node.key);
       if (existing) {
         if (existing.planned) {
@@ -296,7 +300,7 @@ export class TrailGraph {
           existing.endLine = hop.node.endLine;
         }
         existing.routeId = route.id;
-        existing.routeStep = steps[i];
+        existing.routeCore = hop.core || undefined;
         existing.routeNote = hop.note;
       } else {
         this.nodes.set(hop.node.key, {
@@ -306,11 +310,11 @@ export class TrailGraph {
           pinned: false,
           planned: true,
           routeId: route.id,
-          routeStep: steps[i],
+          routeCore: hop.core || undefined,
           routeNote: hop.note,
         });
       }
-    });
+    }
     hops.forEach((hop, i) => {
       const from = hop.calledFrom === undefined ? undefined : hops[hop.calledFrom];
       if (!from || hop.calledFrom === i) {
@@ -342,7 +346,7 @@ export class TrailGraph {
         this.outEdges.delete(key);
       } else {
         node.routeId = undefined;
-        node.routeStep = undefined;
+        node.routeCore = undefined;
         node.routeNote = undefined;
       }
     }

@@ -191,7 +191,6 @@ export class GuideFeature implements vscode.Disposable {
     const durations = this.stats.get<Record<string, number[]>>(DURATIONS_KEY, {});
     const statsKey = `${runner.name}/${target.unit}`;
     const typicalS = Math.round(typicalMs(durations[statsKey] ?? []) / 1000);
-    const model = cfg.get<string>('guide.model', '').trim() || undefined;
 
     let raw: string;
     const startMs = Date.now();
@@ -199,24 +198,24 @@ export class GuideFeature implements vscode.Disposable {
       raw = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          // the title names the model so an unset setting is visible as such
-          title: `SightRead: interpreting ${target.name} via ${runner.name}${model ? ` · ${model}` : ' (default model)'}…`,
+          title: `SightRead: interpreting ${target.name} via ${runner.name}…`,
           cancellable: true,
         },
         (progress, token) => {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
-          // the harness is silent until it finishes — an elapsed/limit tick is
-          // the "still alive" signal; the typical figure says whether the
-          // current wait is normal
+          // the harness is silent until it finishes — an elapsed tick is the
+          // "still alive" signal; the typical figure says whether the current
+          // wait is normal. Constant text first, the growing counter last —
+          // a changing prefix makes the notification re-wrap and jitter.
           const limitS = Math.round(RUN_TIMEOUT_MS / 1000);
-          const typicalNote = ` (typically ~${typicalS}s)`;
+          const prefix = `typically ~${typicalS}s · limit ${limitS}s · elapsed `;
           const ticker = setInterval(() => {
             const elapsedS = Math.round((Date.now() - startMs) / 1000);
-            progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
+            progress.report({ message: `${prefix}${elapsedS}s` });
           }, 1000);
           return runner
-            .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal, model })
+            .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal })
             .finally(() => clearInterval(ticker));
         },
       );

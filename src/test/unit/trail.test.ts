@@ -7,7 +7,7 @@ function n(name: string, uri = 'file:///a.ts', line = 0, endLine = 10): TrailNod
 
 function hop(
   name: string,
-  opts?: { calledFrom?: number; callsiteLine?: number; note?: string },
+  opts?: { calledFrom?: number; callsiteLine?: number; note?: string; core?: boolean },
 ): RouteHopInput {
   return { node: n(name), ...opts };
 }
@@ -216,39 +216,37 @@ suite('trail: planned route', () => {
     assert.strictEqual(g.node(n('model').key)?.routeNote, 'the shape everything moves');
   });
 
-  test('route steps follow a pre-order walk by call-site line, not the hop list order', () => {
+  test('core hops carry the flag, others stay unmarked', () => {
     const g = new TrailGraph();
     g.seedRoute(
       [
-        hop('entry'),
-        hop('late', { calledFrom: 0, callsiteLine: 20 }),
-        hop('early', { calledFrom: 0, callsiteLine: 3 }),
-        hop('deep', { calledFrom: 2, callsiteLine: 1 }),
+        hop('entry', { core: true }),
+        hop('plumbing', { calledFrom: 0, callsiteLine: 3 }),
+        hop('meat', { calledFrom: 1, callsiteLine: 8, core: true }),
       ],
-      'order test',
+      'goal',
     );
-    const step = (name: string): number | undefined => g.node(n(name).key)?.routeStep;
-    assert.deepStrictEqual(
-      [step('entry'), step('early'), step('deep'), step('late')],
-      [1, 2, 3, 4],
-    );
+    assert.strictEqual(g.node(n('entry').key)?.routeCore, true);
+    assert.strictEqual(g.node(n('plumbing').key)?.routeCore, undefined);
+    assert.strictEqual(g.node(n('meat').key)?.routeCore, true);
   });
 
-  test('seeding onto an existing walked node keeps it walked and only adds the step badge', () => {
+  test('seeding onto an existing walked node keeps it walked and only adds the route badge', () => {
     const g = new TrailGraph();
     g.upsert(n('walked', 'file:///a.ts', 5, 15));
-    g.seedRoute([hop('walked'), hop('x', { calledFrom: 0, callsiteLine: 2 })], 'goal');
+    g.seedRoute([hop('walked', { core: true }), hop('x', { calledFrom: 0, callsiteLine: 2 })], 'goal');
     const walked = g.node(n('walked').key);
     assert.strictEqual(walked?.planned, false);
-    assert.strictEqual(walked?.routeStep, 1);
+    assert.strictEqual(walked?.routeCore, true);
     assert.strictEqual(walked?.line, 5); // self-healed position survives the seed
     assert.strictEqual(g.node(n('x').key)?.planned, true);
   });
 
-  test('a hop without calledFrom becomes an extra planned root', () => {
+  test('a hop without calledFrom becomes an extra planned root, roots in step order', () => {
     const g = new TrailGraph();
     g.seedRoute([hop('entry'), hop('stray')], 'goal');
-    assert.deepStrictEqual(g.roots().map((r) => r.name).sort(), ['entry', 'stray']);
+    // exact order: step 1 on top, despite roots() sorting newest-seq first
+    assert.deepStrictEqual(g.roots().map((r) => r.name), ['entry', 'stray']);
   });
 
   test('two routes coexist; an overlapping node takes the latest route badge; routeOf reports each', () => {
@@ -265,11 +263,11 @@ suite('trail: planned route', () => {
   test('clearPlanned removes every route: planned nodes, edges, badges and the registry', () => {
     const g = new TrailGraph();
     g.recordEdge(n('a'), n('b'), 1);
-    g.seedRoute([hop('a'), hop('c', { calledFrom: 0, callsiteLine: 7 })], 'goal');
+    g.seedRoute([hop('a', { core: true }), hop('c', { calledFrom: 0, callsiteLine: 7 })], 'goal');
     g.clearPlanned();
     assert.strictEqual(g.node(n('c').key), undefined);
     assert.deepStrictEqual(g.children(n('a').key).map((c) => c.node.name), ['b']);
-    assert.strictEqual(g.node(n('a').key)?.routeStep, undefined);
+    assert.strictEqual(g.node(n('a').key)?.routeCore, undefined);
     assert.strictEqual(g.routeOf(n('a').key), undefined);
   });
 });
@@ -277,10 +275,12 @@ suite('trail: planned route', () => {
 suite('trail: route conversion', () => {
   test('touch inside a planned node converts it to walked', () => {
     const g = new TrailGraph();
-    g.seedRoute([hop('p')], 'goal');
+    g.seedRoute([hop('p', { note: 'why here', core: true })], 'goal');
     g.touch(n('p').key);
     assert.strictEqual(g.node(n('p').key)?.planned, false);
-    assert.strictEqual(g.node(n('p').key)?.routeStep, 1); // the badge survives conversion
+    // the badge and note survive conversion
+    assert.strictEqual(g.node(n('p').key)?.routeCore, true);
+    assert.strictEqual(g.node(n('p').key)?.routeNote, 'why here');
   });
 
   test('recordEdge over a planned edge converts it and replaces the seeded call site', () => {

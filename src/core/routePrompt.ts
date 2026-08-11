@@ -48,6 +48,9 @@ const DEFAULT_ROUTE_TEMPLATE =
   '- The route starts at an entry: where the behavior is triggered or wired up —\n' +
   '  a command or route registration, an event subscription, a public API, a main\n' +
   '  function. The most upstream point from which everything below makes sense.\n' +
+  '- If the goal asks who uses or calls a symbol, lay out a chain from EVERY\n' +
+  '  entry that reaches it and include the symbol itself as each chain\'s last\n' +
+  '  hop — a caller the reader never learns about is a surprise.\n' +
   '- Every non-entry hop must be directly called or used by its calledBy hop.\n' +
   "  Record the exact line in that hop's body where the call/use happens.\n" +
   '- Follow the spine that serves the goal; skip logging, error plumbing and side\n' +
@@ -56,6 +59,8 @@ const DEFAULT_ROUTE_TEMPLATE =
   '  understood. Complex goals may need several components; keep only the ones\n' +
   '  that carry the mechanism.\n' +
   '- Stop when the core mechanism is reached — fewer hops is better.\n' +
+  '- Mark "core": true on the few hops where the goal is actually implemented —\n' +
+  '  the places that do the real work, not the plumbing that leads there.\n' +
   '- If the goal is broad, route the main execution path. If the goal cannot be\n' +
   '  found in this repository, return an empty hops array and use the summary to\n' +
   '  say what you searched for and the closest thing you found.\n' +
@@ -74,7 +79,9 @@ const DEFAULT_TRACE_TEMPLATE =
   'Building the route:\n' +
   '- An entry is where behavior is triggered or wired up — a command or route\n' +
   '  registration, an event subscription, a public API, a main function.\n' +
-  '- Pick at most 3 entries — the ones a reader most likely cares about.\n' +
+  '- List EVERY entry whose path reaches this code — an entry the reader never\n' +
+  '  learns about is a surprise, not a simplification. Mark "core": true on\n' +
+  '  every entry hop.\n' +
   '- Every non-entry hop must be directly called or used by its calledBy hop, with\n' +
   "  the exact call/use line. Each chain ends at the symbol above — include it as\n" +
   "  the chain's last hop.\n" +
@@ -100,6 +107,7 @@ function contract(language: string): string {
     '      "kind": "function" | "method" | "class" | "module",\n' +
     '      "line": <1-based line of the definition>,\n' +
     '      "note": "<why this hop, under 100 characters>",\n' +
+    '      "core": <true only on the hops the instructions above mark as core; omit otherwise>,\n' +
     '      "calledBy": <hop number (1-based) whose code calls or uses this one; omit for an entry/root hop>,\n' +
     '      "callsiteLine": <1-based line in the calledBy hop\'s body where the call/use happens; omit when calledBy is absent> }\n' +
     '  ]\n' +
@@ -108,7 +116,8 @@ function contract(language: string): string {
     'Rules:\n' +
     '- The order of the hops array carries no meaning — structure comes only from calledBy. A hop may reference any other hop.\n' +
     '- file/symbol/line must be real — copied from files you actually read.\n' +
-    `- At most 12 hops. Write the summary and every note in ${language}.`
+    '- Keep each tree small: at most 12 hops per tree (a chain plus its side references). The number of trees follows the number of real entries.\n' +
+    `- Write the summary and every note in ${language}.`
   );
 }
 

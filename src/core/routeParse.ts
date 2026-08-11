@@ -22,6 +22,8 @@ export interface RouteHop {
   line?: number;
   /** why this hop is on the route */
   note?: string;
+  /** scenario A: the meat of the goal; scenario B: an entry */
+  core?: boolean;
   /** 0-based index into the surviving hops; undefined = root */
   calledFrom?: number;
   /** 0-based call-site line in the calledFrom hop */
@@ -31,11 +33,15 @@ export interface RouteHop {
 export interface Route {
   summary?: string;
   hops: RouteHop[];
+  /** human-readable log of hops dropped or re-rooted during parsing */
+  dropped: string[];
 }
 
 export type RouteParseResult = { ok: true; route: Route } | { ok: false; error: string };
 
-const MAX_HOPS = 12;
+/** hard safety guard against runaway responses — the quality bound
+ *  (≤12 hops per tree, tree count unbounded) lives in the prompt contract */
+const MAX_HOPS = 60;
 const MAX_NOTE_CHARS = 100;
 const KINDS: ReadonlySet<string> = new Set(['function', 'method', 'class', 'module']);
 
@@ -61,20 +67,28 @@ export function parseRouteResponse(raw: string): RouteParseResult {
   }
 
   // pass 1 — each hop on its own merits; original 1-based number → surviving index
+  const dropped: string[] = [];
   const drafts: (RouteHop & { calledByNumber?: number })[] = [];
   const surviving = new Map<number, number>();
   obj.hops.forEach((h: unknown, i: number) => {
-    if (drafts.length >= MAX_HOPS || typeof h !== 'object' || h === null) {
+    if (drafts.length >= MAX_HOPS) {
+      dropped.push(`hop ${i + 1} dropped: over the ${MAX_HOPS}-hop safety cap`);
       return;
     }
-    const { file, symbol, container, kind, line, note, calledBy, callsiteLine } = h as Record<
+    if (typeof h !== 'object' || h === null) {
+      dropped.push(`hop ${i + 1} dropped: not an object`);
+      return;
+    }
+    const { file, symbol, container, kind, line, note, core, calledBy, callsiteLine } = h as Record<
       string,
       unknown
     >;
     if (typeof file !== 'string' || file.trim() === '') {
+      dropped.push(`hop ${i + 1} dropped: missing "file"`);
       return;
     }
     if (typeof symbol !== 'string' || symbol.trim() === '') {
+      dropped.push(`hop ${i + 1} dropped: missing "symbol"`);
       return;
     }
     surviving.set(i + 1, drafts.length);
@@ -89,6 +103,7 @@ export function parseRouteResponse(raw: string): RouteParseResult {
         typeof note === 'string' && note.trim() !== ''
           ? note.trim().slice(0, MAX_NOTE_CHARS)
           : undefined,
+      core: core === true ? true : undefined,
       calledByNumber: typeof calledBy === 'number' ? Math.floor(calledBy) : undefined,
       callsiteLine: toZeroBased(callsiteLine),
     });
@@ -101,6 +116,11 @@ export function parseRouteResponse(raw: string): RouteParseResult {
   const hops: RouteHop[] = drafts.map(({ calledByNumber, ...hop }, i) => {
     const target = calledByNumber === undefined ? undefined : surviving.get(calledByNumber);
     const calledFrom = target !== undefined && target !== i ? target : undefined;
+    if (calledByNumber !== undefined && calledFrom === undefined) {
+      dropped.push(
+        `hop "${hop.symbol}" re-rooted: calledBy ${calledByNumber} is dropped, unknown, or itself`,
+      );
+    }
     return {
       ...hop,
       calledFrom,
@@ -116,6 +136,7 @@ export function parseRouteResponse(raw: string): RouteParseResult {
       if (p === i) {
         hop.calledFrom = undefined;
         hop.callsiteLine = undefined;
+        dropped.push(`hop "${hop.symbol}" re-rooted: its calledBy chain loops back to it`);
         return;
       }
       seen.add(p);
@@ -123,5 +144,5 @@ export function parseRouteResponse(raw: string): RouteParseResult {
     }
   });
 
-  return { ok: true, route: { summary, hops } };
+  return { ok: true, route: { summary, hops, dropped } };
 }

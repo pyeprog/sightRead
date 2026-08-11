@@ -22,20 +22,21 @@ suite('routeParse: parseRouteResponse', () => {
       JSON.stringify({
         summary: 'lives in a.ts',
         hops: [
-          hopJson(),
+          hopJson({ core: true }),
           hopJson({ symbol: 'bar', container: 'Baz', kind: 'method', line: 30, calledBy: 1, callsiteLine: 12 }),
         ],
       }),
     );
     assert.strictEqual(route.summary, 'lives in a.ts');
     assert.deepStrictEqual(
-      route.hops.map((h) => [h.symbol, h.line, h.calledFrom, h.callsiteLine]),
+      route.hops.map((h) => [h.symbol, h.line, h.calledFrom, h.callsiteLine, h.core]),
       [
-        ['foo', 9, undefined, undefined],
-        ['bar', 29, 0, 11],
+        ['foo', 9, undefined, undefined, true],
+        ['bar', 29, 0, 11, undefined],
       ],
     );
     assert.strictEqual(route.hops[1].containerName, 'Baz');
+    assert.deepStrictEqual(route.dropped, []);
   });
 
   test('hop list order carries no meaning: a forward calledBy reference still links', () => {
@@ -71,6 +72,8 @@ suite('routeParse: parseRouteResponse', () => {
         ['orphan', undefined, undefined],
       ],
     );
+    // both the drop and the resulting re-root are reported for the run log
+    assert.strictEqual(route.dropped.length, 2);
   });
 
   test('breaks calledBy cycles by re-rooting deterministically', () => {
@@ -90,17 +93,18 @@ suite('routeParse: parseRouteResponse', () => {
         ['b', 0],
       ],
     );
+    assert.ok(route.dropped.some((d) => d.includes('loops back')));
   });
 
-  test('caps hops at 12, notes at 100 characters, unknown kinds fall back to function', () => {
+  test('caps hops at the 60 safety guard, notes at 100 characters, unknown kinds fall back to function', () => {
     const route = parsed(
       JSON.stringify({
-        hops: Array.from({ length: 14 }, (_, i) =>
+        hops: Array.from({ length: 70 }, (_, i) =>
           hopJson({ symbol: `s${i}`, kind: 'gadget', note: 'x'.repeat(150) }),
         ),
       }),
     );
-    assert.strictEqual(route.hops.length, 12);
+    assert.strictEqual(route.hops.length, 60);
     assert.strictEqual(route.hops[0].kind, 'function');
     assert.strictEqual(route.hops[0].note?.length, 100);
   });
