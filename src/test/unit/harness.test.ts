@@ -34,12 +34,12 @@ suite('harness: explore invocation', () => {
     assert.ok(aider.args.includes('plan it'));
   });
 
-  test('claude, codex and opencode declare exploreArgs; the rest do not', () => {
+  test('claude, codex, opencode, devin and agy declare exploreArgs; the rest do not', () => {
     const capable = Object.entries(BUILTIN_HARNESSES)
       .filter(([, p]) => p.exploreArgs !== undefined)
       .map(([name]) => name)
       .sort();
-    assert.deepStrictEqual(capable, ['claude', 'codex', 'opencode']);
+    assert.deepStrictEqual(capable, ['agy', 'claude', 'codex', 'devin', 'opencode']);
   });
 });
 

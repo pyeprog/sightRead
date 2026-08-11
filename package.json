@@ -802,7 +802,7 @@
         "sightread.guide.harness": {
           "type": "string",
           "default": "auto",
-          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
+          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `devin`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
         },
         "sightread.guide.customHarnesses": {
           "type": "object",
