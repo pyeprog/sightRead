@@ -92,6 +92,14 @@ const SINGLE_KW_RE =
 const DEFINITION_RE =
   /^(?:export\s+)?(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|final\s+|async\s+)*(def|function|class|fn|func|interface|struct|enum|trait|impl|object|module)[\s*!]+([A-Za-z_$][\w$]*)?/;
 
+// A function value bound to a name is a definition in disguise — the TS/JS
+// idiom `const f = () => {…}` / `f = function (…)`. Without this carve-out it
+// falls into assignment naming and, worse, its body never recurses. A simple
+// `: type` annotation is tolerated; a function-typed one contains `=>` itself
+// and falls back to the assignment path (accepted heuristic miss).
+const FUNCTION_ASSIGN_RE =
+  /^(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?::[^=]+?)?=\s*(?:async\s+)?(function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/;
+
 const FLOW_KEYWORDS = new Set([
   'return',
   'raise',
@@ -375,6 +383,13 @@ function classify(top: string[], opts: SegmentationOptions): Summary {
   const def = first.match(DEFINITION_RE);
   if (def) {
     return { kind: 'definition', name: def[2] ? `${def[1]} ${def[2]}` : def[1] };
+  }
+  const fnAssign = first.match(FUNCTION_ASSIGN_RE);
+  if (fnAssign) {
+    return {
+      kind: 'definition',
+      name: `${fnAssign[1]} = ${fnAssign[2].startsWith('function') ? 'function' : '() =>'}`,
+    };
   }
   if (kw && FLOW_KEYWORDS.has(kw)) {
     const bare = first.replace(/[;\s]+$/, '') === kw;
