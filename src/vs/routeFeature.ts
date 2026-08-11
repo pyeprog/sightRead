@@ -151,6 +151,9 @@ export class RouteFeature implements vscode.Disposable {
     const typicalS = Math.round(
       typicalMs(durations[statsKey] ?? [], ROUTE_TYPICAL_PRIOR_MS) / 1000,
     );
+    const model =
+      vscode.workspace.getConfiguration('sightread').get<string>('guide.model', '').trim() ||
+      undefined;
 
     let raw: string;
     const startMs = Date.now();
@@ -158,7 +161,8 @@ export class RouteFeature implements vscode.Disposable {
       raw = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `SightRead: planning a route via ${runner.name}`,
+          // the title names the model so an unset setting is visible as such
+          title: `SightRead: planning a route via ${runner.name}${model ? ` · ${model}` : ' (default model)'}`,
           cancellable: true,
         },
         (progress, token) => {
@@ -179,6 +183,7 @@ export class RouteFeature implements vscode.Disposable {
               timeoutMs: ROUTE_TIMEOUT_MS,
               signal: abort.signal,
               explore: true,
+              model,
             })
             .finally(() => clearInterval(ticker));
         },
