@@ -10,6 +10,12 @@
 /** Successful runs kept per key — enough for a stable median, quick to adapt. */
 const MAX_SAMPLES = 10;
 
+/**
+ * Empirical prior shown until a first run is recorded: one-shot interpret
+ * runs measured at 38–85s, median ≈60s (claude, function unit, 2026-08).
+ */
+export const DEFAULT_TYPICAL_MS = 60_000;
+
 /** Appends a run's duration, keeping the newest MAX_SAMPLES. */
 export function recordDuration(recent: readonly number[], ms: number): number[] {
   return [...recent, ms].slice(-MAX_SAMPLES);
@@ -17,11 +23,11 @@ export function recordDuration(recent: readonly number[], ms: number): number[] 
 
 /**
  * The typical duration: median of the recorded runs, robust against the odd
- * outlier run. Undefined until a first run has been recorded.
+ * outlier run. The empirical prior until a first run has been recorded.
  */
-export function typicalMs(recent: readonly number[]): number | undefined {
+export function typicalMs(recent: readonly number[]): number {
   if (recent.length === 0) {
-    return undefined;
+    return DEFAULT_TYPICAL_MS;
   }
   const sorted = [...recent].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);

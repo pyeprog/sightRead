@@ -1,9 +1,9 @@
 import * as assert from 'assert';
-import { recordDuration, typicalMs } from '../../core/runStats';
+import { DEFAULT_TYPICAL_MS, recordDuration, typicalMs } from '../../core/runStats';
 
 suite('runStats', () => {
   test('typicalMs is the median, robust against an outlier run', () => {
-    assert.strictEqual(typicalMs([]), undefined);
+    assert.strictEqual(typicalMs([]), DEFAULT_TYPICAL_MS);
     assert.strictEqual(typicalMs([40_000]), 40_000);
     assert.strictEqual(typicalMs([30_000, 45_000, 170_000]), 45_000);
     assert.strictEqual(typicalMs([30_000, 40_000, 50_000, 60_000]), 45_000);

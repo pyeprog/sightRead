@@ -189,8 +189,7 @@ export class GuideFeature implements vscode.Disposable {
 
     const durations = this.stats.get<Record<string, number[]>>(DURATIONS_KEY, {});
     const statsKey = `${runner.name}/${target.unit}`;
-    const typical = typicalMs(durations[statsKey] ?? []);
-    const typicalS = typical === undefined ? undefined : Math.round(typical / 1000);
+    const typicalS = Math.round(typicalMs(durations[statsKey] ?? []) / 1000);
 
     let raw: string;
     const startMs = Date.now();
@@ -208,7 +207,7 @@ export class GuideFeature implements vscode.Disposable {
           // the "still alive" signal; the typical figure says whether the
           // current wait is normal
           const limitS = Math.round(RUN_TIMEOUT_MS / 1000);
-          const typicalNote = typicalS === undefined ? '' : ` (typically ~${typicalS}s)`;
+          const typicalNote = ` (typically ~${typicalS}s)`;
           const ticker = setInterval(() => {
             const elapsedS = Math.round((Date.now() - startMs) / 1000);
             progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
