@@ -129,11 +129,24 @@ function substitute(template: string, values: Record<string, string>): string {
   return text;
 }
 
-export function buildRoutePrompt(goal: string, opts?: RoutePromptOptions): string {
+export function buildRoutePrompt(
+  goal: string,
+  opts?: RoutePromptOptions,
+  cursor?: TraceContext,
+): string {
   const template = opts?.template?.trim() ? opts.template : DEFAULT_ROUTE_TEMPLATE;
   let text = substitute(template, { goal });
   if (!template.includes('${goal}')) {
     text += `\n\nThe reader's goal: ${goal}`;
+  }
+  if (cursor) {
+    // appended outside the template, like the contract: the goal is typed with
+    // the cursor somewhere, and "it"/"this" must resolve to that code
+    text +=
+      `\n\nWhile typing the goal the reader's cursor was on ${cursor.subjectName} in ` +
+      `${cursor.filePath} (lines ${cursor.startLine}-${cursor.endLine}). A goal that ` +
+      'points at code without naming it — "this", "it", a bare pronoun in any ' +
+      'language — means this symbol.';
   }
   return text + contract(opts?.language?.trim() || 'English');
 }

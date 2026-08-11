@@ -10,7 +10,7 @@
  * never describe what the code does, at any granularity.
  */
 
-import { InterpretUnit } from './guide';
+import { InterpretUnit } from './marks';
 
 export interface SubjectContext {
   /** workspace-relative path, for the agent's orientation */

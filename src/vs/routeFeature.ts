@@ -18,6 +18,8 @@ import { TrailViewFeature, moduleNodeOf, trailKind, trailNodeKey } from './trail
 
 /** exploration is many tool calls, not one shot — a wider bound than the guide's */
 const ROUTE_TIMEOUT_MS = 300_000;
+/** cursor context only makes sense for real code documents */
+const CURSOR_SCHEMES = new Set(['file', 'untitled']);
 /** empirical prior for explore runs until the first one is recorded */
 const ROUTE_TYPICAL_PRIOR_MS = 120_000;
 
@@ -30,17 +32,17 @@ const ROUTE_TYPICAL_PRIOR_MS = 120_000;
  */
 export class RouteFeature implements vscode.Disposable {
   private subscriptions: vscode.Disposable[] = [];
-  /** silent run log: raw responses plus every dropped/re-rooted/fallback hop —
-   *  the only way to tell a bad AI answer from a good one we mangled */
-  private channel = vscode.window.createOutputChannel('SightRead');
 
   constructor(
     private trail: TrailViewFeature,
     /** globalState — typical durations belong to the machine's harness */
     private stats: vscode.Memento,
+    /** shared "SightRead" channel (owned by extension.ts): raw responses plus
+     *  every dropped/re-rooted/fallback hop — the only way to tell a bad AI
+     *  answer from a good one we mangled */
+    private channel: vscode.OutputChannel,
   ) {
     this.subscriptions.push(
-      this.channel,
       vscode.commands.registerCommand('sightread.planRoute', () => this.planRoute()),
       vscode.commands.registerCommand('sightread.traceEntries', () => this.traceEntries()),
     );
@@ -56,25 +58,26 @@ export class RouteFeature implements vscode.Disposable {
     if (!runner) {
       return;
     }
+    // captured before the input box: a goal saying "it"/"this" without naming
+    // a symbol means the code the cursor was on when the user reached for AI
+    const cursor = await this.cursorContext();
     // the goal is the query itself — empty or Esc means nothing to plan
     const goal = await vscode.window.showInputBox({
-      title: 'Plan Reading Route (AI)',
-      prompt: `Prompt = built-in rules + promptTemplate.route setting + this goal. The ${runner.name} agent explores the repository read-only.`,
+      title: 'Find Logic Routes (AI)',
+      prompt: `Prompt = built-in rules + promptTemplate.route setting + this goal${
+        cursor ? ' + your cursor position' : ''
+      }. The ${runner.name} agent explores the repository read-only.`,
       placeHolder: 'e.g. how does a highlight survive edits?',
     });
     if (!goal?.trim()) {
       return;
     }
-    const prompt = buildRoutePrompt(goal.trim(), this.promptOptions('route'));
+    const prompt = buildRoutePrompt(goal.trim(), this.promptOptions('route'), cursor);
     await this.runRoute(runner, root, prompt, 'route', goal.trim());
   }
 
   /** Scenario B: the code under the cursor, traced back to its entries. */
   private async traceEntries(): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
-    }
     const root = this.workspaceRoot();
     if (!root) {
       return;
@@ -83,19 +86,32 @@ export class RouteFeature implements vscode.Disposable {
     if (!runner) {
       return;
     }
+    const ctx = await this.cursorContext();
+    if (!ctx) {
+      return;
+    }
+    const prompt = buildTracePrompt(ctx, this.promptOptions('trace'));
+    await this.runRoute(runner, root, prompt, 'trace', `entries → ${ctx.subjectName}`);
+  }
+
+  /** The symbol under the cursor — trace's query, and the referent of a route
+   *  goal that says "it" instead of naming a symbol. */
+  private async cursorContext(): Promise<TraceContext | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !CURSOR_SCHEMES.has(editor.document.uri.scheme)) {
+      return undefined;
+    }
     const doc = editor.document;
     const { at } = await findEnclosingFunctions(doc, editor.selection.active);
     const target = at
       ? { name: stripParens(at.name), range: at.range }
       : await resolveInterpretTarget(doc, editor.selection);
-    const ctx: TraceContext = {
+    return {
       filePath: vscode.workspace.asRelativePath(doc.uri),
       subjectName: target.name,
       startLine: target.range.start.line + 1,
       endLine: target.range.end.line + 1,
     };
-    const prompt = buildTracePrompt(ctx, this.promptOptions('trace'));
-    await this.runRoute(runner, root, prompt, 'trace', `entries → ${target.name}`);
   }
 
   private workspaceRoot(): vscode.Uri | undefined {
@@ -162,7 +178,7 @@ export class RouteFeature implements vscode.Disposable {
         {
           location: vscode.ProgressLocation.Notification,
           // the title names the model so an unset setting is visible as such
-          title: `SightRead: planning a route via ${runner.name}${model ? ` · ${model}` : ' (default model)'}`,
+          title: `SightRead: finding a route via ${runner.name}${model ? ` · ${model}` : ' (default model)'}`,
           cancellable: true,
         },
         (progress, token) => {

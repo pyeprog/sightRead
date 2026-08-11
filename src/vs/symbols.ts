@@ -7,7 +7,7 @@ import {
   chooseInterpretUnit,
   chooseOutermostFunction,
 } from '../core/enclosing';
-import { InterpretUnit } from '../core/guide';
+import { InterpretUnit } from '../core/marks';
 import { stripParens } from '../core/jumpClassify';
 
 const FUNCTION_KINDS = new Set<vscode.SymbolKind>([

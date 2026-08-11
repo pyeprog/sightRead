@@ -6,7 +6,7 @@ import {
   pickDeparture,
   stripParens,
 } from '../core/jumpClassify';
-import { markersInLineRange } from '../core/markers';
+import { markVisible, marksInLineRange } from '../core/marks';
 import {
   RouteHopInput,
   TrailGraph,
@@ -14,8 +14,9 @@ import {
   TrailNodeKind,
   UNKNOWN_CALLSITE,
 } from '../core/trail';
-import { MarkerRepository } from './highlighter';
-import { markerThemeColor } from './palette';
+import { Compositor } from './compositor';
+import { MarkRepository } from './markRepository';
+import { accentThemeColor } from './palette';
 import { SymbolAtCursor, findEnclosingFunctions } from './symbols';
 
 const FIRE_THROTTLE_MS = 80;
@@ -180,31 +181,40 @@ export class TrailViewFeature
   private prev: TrailSettled | undefined;
   private pending: TrailSettled[] = [];
   private rawHistory: RawCursorState[] = [];
-  private paused = false;
   /** bumped by clear() — invalidates in-flight verifications */
   private generation = 0;
+  /** bumped by the tree-only collapse/expand pair — new item ids re-render */
+  private foldGeneration = 0;
+  /** default collapsible state for the current render generation */
+  private defaultCollapsed = false;
+  /** label of the most recently applied route — the description fallback */
+  private lastRouteLabel: string | undefined;
   private fireTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingReveal: string | undefined;
   private subscriptions: vscode.Disposable[] = [];
 
-  constructor(private repo: MarkerRepository) {
+  constructor(
+    private repo: MarkRepository,
+    private compositor: Compositor,
+  ) {
     this.view = vscode.window.createTreeView('sightread.trailView', {
       treeDataProvider: this,
-      showCollapseAll: true,
     });
     this.subscriptions.push(
       this.view,
       this.view.onDidChangeVisibility((e) => {
         if (e.visible) {
           this.replayPending();
+          this.revealActiveCursor();
         }
       }),
       vscode.window.registerFileDecorationProvider(this),
       this.repo.onDidChange(() => this.decoEmitter.fire(undefined)),
+      this.compositor.onDidChangeHiddenAccents(() => this.decoEmitter.fire(undefined)),
       vscode.window.onDidChangeTextEditorSelection((e) => this.onRawSelection(e)),
       this.view.onDidChangeSelection(() => this.refreshHeader()),
     );
-    void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', false);
+    void vscode.commands.executeCommand('setContext', 'sightread.trailFolded', false);
   }
 
   /**
@@ -239,11 +249,6 @@ export class TrailViewFeature
   }
 
   onSettled(s: TrailSettled): void {
-    if (this.paused) {
-      this.prev = s;
-      this.pending = [];
-      return;
-    }
     if (!this.view.visible) {
       this.pending.push(s);
       if (this.pending.length > PENDING_MAX) {
@@ -254,6 +259,23 @@ export class TrailViewFeature
     const prev = this.prev;
     this.prev = s;
     void this.process(prev, s);
+  }
+
+  /** Opening the view meets the reader where they already are: selects the
+   *  node containing the active cursor. Reveal only — visibility alone must
+   *  not convert a planned node the way an arrival (touch) does. */
+  private revealActiveCursor(): void {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+    const here = this.graph.nodeAt(
+      editor.document.uri.toString(),
+      editor.selection.active.line,
+    );
+    if (here) {
+      void this.revealNode(here.key);
+    }
   }
 
   /** Replays the hidden-period ring so the jumps just made appear on open. */
@@ -432,9 +454,10 @@ export class TrailViewFeature
     }
   }
 
-  /** Selects the node's first occurrence in the projection, without focus. */
+  /** Selects the node's first occurrence in the projection, without focus.
+   *  Skipped while the tree is collapsed — reveal would re-expand it. */
   private async revealNode(key: string): Promise<void> {
-    if (!this.view.visible) {
+    if (!this.view.visible || this.defaultCollapsed) {
       return;
     }
     const path = this.pathTo(key);
@@ -473,19 +496,23 @@ export class TrailViewFeature
     return undefined;
   }
 
-  setPaused(paused: boolean): void {
-    this.paused = paused;
-    this.refreshHeader();
-    void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', paused);
-    if (paused) {
-      this.pending = [];
+  /** Tree-only collapse/expand-all, mirrored into the when-clause context
+   *  that swaps the title button. Never touches editor folding. */
+  setFolded(folded: boolean): void {
+    if (this.defaultCollapsed === folded) {
+      return;
     }
+    this.defaultCollapsed = folded;
+    this.foldGeneration++;
+    void vscode.commands.executeCommand('setContext', 'sightread.trailFolded', folded);
+    this.emitter.fire();
   }
 
   clear(): void {
     this.generation++;
     this.graph.clear();
     this.pendingReveal = undefined;
+    this.lastRouteLabel = undefined;
     this.refreshHeader();
     this.fireSoon();
   }
@@ -496,18 +523,13 @@ export class TrailViewFeature
    * fresh projection, not one 80ms away.
    */
   async applyRoute(hops: RouteHopInput[], label: string): Promise<void> {
+    this.setFolded(false); // the reveals below need an expandable tree
+    this.lastRouteLabel = label;
     this.graph.seedRoute(hops, label);
     this.emitter.fire();
     this.decoEmitter.fire(undefined);
     await this.expandRoute(hops);
-    this.refreshHeader(`Route: ${label}`);
-  }
-
-  /** Removes all still-planned route elements and their badges. */
-  clearRoutes(): void {
-    this.graph.clearPlanned();
     this.refreshHeader();
-    this.fireSoon();
   }
 
   /** The tree path of a hop's element: along calledFrom links, roots resolved
@@ -565,43 +587,22 @@ export class TrailViewFeature
   }
 
   /**
-   * The single header line above the tree (TreeView.message): pause state
-   * plus the selected node's route label. One home for all trail status —
-   * view.description stays unused.
+   * The two header channels: description = what the trail is following (the
+   * selected node's route, else the last applied one), message = the legend
+   * for the description badges, shown while the tree has content.
    */
-  private refreshHeader(routeFallback?: string): void {
+  private refreshHeader(): void {
     const key = this.view.selection[0]?.key;
     const route = key === undefined ? undefined : this.graph.routeOf(key);
-    const parts: string[] = [];
-    if (this.paused) {
-      parts.push('⏸ paused');
-    }
-    const routeText = route ? `Route: ${route.label}` : routeFallback;
-    if (routeText) {
-      parts.push(routeText);
-    }
-    this.view.message = parts.length > 0 ? parts.join(' · ') : undefined;
+    const label = route?.label ?? this.lastRouteLabel;
+    this.view.description = label ? `Route: ${label}` : undefined;
+    this.view.message =
+      this.graph.roots().length > 0 ? '★ core · ↻ recursive · ↙ call site' : undefined;
   }
 
-  /** Explicit recall fallback: seed the current function (or module) as a root. */
-  async pinCurrent(): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
-    }
-    const pos = editor.selection.active;
-    const { at } = await findEnclosingFunctions(editor.document, pos);
-    const node = nodeOf({
-      uriString: editor.document.uri.toString(),
-      line: pos.line,
-      character: pos.character,
-      at,
-      lineCount: editor.document.lineCount,
-      atMs: Date.now(),
-    });
-    this.graph.upsert(node, true);
-    this.fireSoon(node.key);
-    void vscode.commands.executeCommand('sightread.trailView.focus');
+  /** Current tree selection (test hook). */
+  get treeSelection(): readonly TrailElement[] {
+    return this.view.selection;
   }
 
   removeElement(el?: TrailElement): void {
@@ -638,11 +639,13 @@ export class TrailViewFeature
     // (and joins type-to-filter); the file is click-reachable, tooltip only
     const item = new vscode.TreeItem(
       node.containerName ? `${node.containerName}.${node.name}` : node.name,
-      hasChildren
-        ? vscode.TreeItemCollapsibleState.Expanded
-        : vscode.TreeItemCollapsibleState.None,
+      !hasChildren
+        ? vscode.TreeItemCollapsibleState.None
+        : this.defaultCollapsed
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.Expanded,
     );
-    item.id = [...el.path, el.key].join('→');
+    item.id = `${[...el.path, el.key].join('→')}:g${this.foldGeneration}`;
     item.contextValue = 'trailNode';
     // dim follows the NODE alone: clicking an item converts it and must
     // light it up — keeping an occurrence dim for its unwalked edge reads
@@ -662,7 +665,7 @@ export class TrailViewFeature
       parts.push('↻');
     }
     if (el.callsiteLine !== undefined) {
-      parts.push(`↙ line ${el.callsiteLine + 1}`);
+      parts.push(`↙ L${el.callsiteLine + 1}`);
     }
     item.description = parts.join(' · ');
     item.resourceUri = trailUri(node, dim); // markers tint the label (importance is human judgment)
@@ -717,14 +720,19 @@ export class TrailViewFeature
       return { color: new vscode.ThemeColor('disabledForeground') };
     }
     const range = /^\/(\d+)-(\d+)$/.exec(uri.path);
-    const marker = range
-      ? markersInLineRange(
-          this.repo.get(vscode.Uri.parse(uri.query)),
+    // only manual color marks tint the trail — importance is human judgment
+    const mark = range
+      ? marksInLineRange(
+          this.repo.get(vscode.Uri.parse(uri.query)).marks,
           Number(range[1]),
           Number(range[2]),
-        )[0]
+        ).find(
+          (m) =>
+            m.accent.kind === 'color' &&
+            markVisible(m.accent, this.compositor.getHiddenAccents()),
+        )
       : undefined;
-    return marker ? { color: markerThemeColor(marker.color) } : undefined;
+    return mark ? { color: accentThemeColor(mark.accent) } : undefined;
   }
 
   private fireSoon(revealKey?: string): void {
@@ -738,6 +746,7 @@ export class TrailViewFeature
       this.fireTimer = undefined;
       this.emitter.fire();
       this.decoEmitter.fire(undefined);
+      this.refreshHeader(); // the legend appears with the first recorded node
       const key = this.pendingReveal;
       this.pendingReveal = undefined;
       if (key) {
@@ -761,14 +770,12 @@ export function registerTrailCommands(
   trail: TrailViewFeature,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('sightread.trailPin', () => trail.pinCurrent()),
     vscode.commands.registerCommand('sightread.trailClear', () => trail.clear()),
-    vscode.commands.registerCommand('sightread.trailPause', () => trail.setPaused(true)),
-    vscode.commands.registerCommand('sightread.trailResume', () => trail.setPaused(false)),
+    vscode.commands.registerCommand('sightread.trailCollapseAll', () => trail.setFolded(true)),
+    vscode.commands.registerCommand('sightread.trailExpandAll', () => trail.setFolded(false)),
     vscode.commands.registerCommand('sightread.trailRemove', (el?: TrailElement) =>
       trail.removeElement(el),
     ),
-    vscode.commands.registerCommand('sightread.routeClear', () => trail.clearRoutes()),
     vscode.commands.registerCommand('sightread.trailGoToCaller', (el?: TrailElement) =>
       trail.goToCallerSite(el),
     ),

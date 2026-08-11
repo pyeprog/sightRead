@@ -1,17 +1,10 @@
 import * as vscode from 'vscode';
 import { invalidateHarnessCache } from './vs/agentCli';
 import { Compositor } from './vs/compositor';
-import {
-  MarkerRepository,
-  handleDocumentChange,
-  registerHighlighterCommands,
-} from './vs/highlighter';
-import { EntriesViewFeature, registerEntryCommands } from './vs/entriesView';
-import {
-  GuideFeature,
-  GuideRepository,
-  handleGuideDocumentChange,
-} from './vs/guideFeature';
+import { EntriesFeature, registerEntryCommands } from './vs/entries';
+import { GuideFeature } from './vs/guideFeature';
+import { handleDocumentChange, registerHighlighterCommands } from './vs/highlighter';
+import { MarkRepository } from './vs/markRepository';
 import { MarkersViewFeature } from './vs/markersView';
 import { RouteFeature } from './vs/routeFeature';
 import { SegmentCache } from './vs/segmentCache';
@@ -43,26 +36,25 @@ const SPOTLIGHT_PICK_ITEMS: { level: SpotlightLevel; label: string; description:
 ];
 
 export function activate(context: vscode.ExtensionContext): unknown {
-  const repo = new MarkerRepository(context.workspaceState);
-  const guideRepo = new GuideRepository(context.workspaceState);
+  const repo = new MarkRepository(context.workspaceState);
   const segmentCache = new SegmentCache();
-  const compositor = new Compositor(
-    (uri) => repo.get(uri),
-    (uri) => guideRepo.get(uri),
-  );
+  const compositor = new Compositor((uri) => repo.get(uri));
   const spotlight = new SpotlightController();
-  const markersView = new MarkersViewFeature(repo, guideRepo, compositor);
-  const segmentsView = new SegmentsViewFeature(repo, guideRepo, compositor);
-  const entriesView = new EntriesViewFeature();
-  const trailView = new TrailViewFeature(repo);
-  const guideFeature = new GuideFeature(guideRepo, compositor, context.globalState);
-  const routeFeature = new RouteFeature(trailView, context.globalState);
+  const markersView = new MarkersViewFeature(repo, compositor);
+  const segmentsView = new SegmentsViewFeature(repo, compositor);
+  const entries = new EntriesFeature();
+  const trailView = new TrailViewFeature(repo, compositor);
+  // one channel for every AI run — interpret, route and trace all log here
+  const channel = vscode.window.createOutputChannel('SightRead');
+  const guideFeature = new GuideFeature(repo, compositor, context.globalState, channel);
+  const routeFeature = new RouteFeature(trailView, context.globalState, channel);
   context.subscriptions.push(
     compositor,
     markersView,
     segmentsView,
-    entriesView,
+    entries,
     trailView,
+    channel,
     guideFeature,
     routeFeature,
   );
@@ -81,32 +73,32 @@ export function activate(context: vscode.ExtensionContext): unknown {
     spotlightStatus.text = `$(${level === 0 ? 'eye-closed' : 'eye'}) ${SPOTLIGHT_LEVEL_NAMES[level]}`;
   };
   spotlightStatus.show();
-  // an active role filter hides guide steps everywhere — without a global
-  // signal, a forgotten filter reads as lost steps
-  const guideFilterStatus = vscode.window.createStatusBarItem(
+  // an active filter hides marks everywhere — without a global signal, a
+  // forgotten filter reads as lost marks
+  const filterStatus = vscode.window.createStatusBarItem(
     'sightread.guideFilter',
     vscode.StatusBarAlignment.Right,
     99,
   );
-  guideFilterStatus.name = 'SightRead Guide Filter';
-  guideFilterStatus.command = 'sightread.guideFilterRoles';
-  context.subscriptions.push(guideFilterStatus);
-  const syncGuideFilterUi = (): void => {
-    const hidden = compositor.getHiddenGuideRoles();
+  filterStatus.name = 'SightRead Mark Filter';
+  filterStatus.command = 'sightread.guideFilterRoles';
+  context.subscriptions.push(filterStatus);
+  const syncFilterUi = (): void => {
+    const hidden = compositor.getHiddenAccents();
     if (hidden.size === 0) {
-      guideFilterStatus.hide();
+      filterStatus.hide();
       return;
     }
-    const roles = [...hidden]
+    const keys = [...hidden]
       .sort()
-      .map((key) => key || '(untagged)')
+      .map((key) => key.replace(/^(color|role):/, '') || '(untagged)')
       .join(', ');
-    guideFilterStatus.text = `$(filter-filled) ${hidden.size} hidden`;
-    guideFilterStatus.tooltip = `SightRead: guide roles hidden everywhere — ${roles}. Click to change.`;
-    guideFilterStatus.show();
+    filterStatus.text = `$(filter-filled) ${hidden.size} hidden`;
+    filterStatus.tooltip = `SightRead: marks hidden everywhere — ${keys}. Click to change.`;
+    filterStatus.show();
   };
-  context.subscriptions.push(compositor.onDidChangeHiddenGuideRoles(syncGuideFilterUi));
-  syncGuideFilterUi();
+  context.subscriptions.push(compositor.onDidChangeHiddenAccents(syncFilterUi));
+  syncFilterUi();
 
   // ---- the single cursor pipeline (design.md §四) ----------------------------
   // selection change → enclosing function → tint → segments → focus → render.
@@ -136,7 +128,6 @@ export function activate(context: vscode.ExtensionContext): unknown {
     if (token !== pipelineToken) {
       return;
     }
-    void entriesView.revealCursor(doc, pos);
     void markersView.revealCursor(doc, pos);
     const tintEnabled = vscode.workspace
       .getConfiguration('sightread')
@@ -180,7 +171,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   }
 
   // ---- commands --------------------------------------------------------------
-  registerHighlighterCommands(context, repo, guideRepo, compositor);
+  registerHighlighterCommands(context, repo, compositor);
   registerSkeletonFoldCommands(context, segmentCache, {
     afterFold: () => segmentsView.collapseAllTree(),
     afterUnfold: () => segmentsView.expandAll(),
@@ -188,7 +179,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   registerGoToSegment(context, segmentCache);
   registerSegmentMarkCommands(context, repo, compositor);
   registerSegmentFoldCommands(context);
-  registerEntryCommands(context, entriesView);
+  registerEntryCommands(context, entries);
   registerTrailCommands(context, trailView);
   const setSpotlight = (level: SpotlightLevel): void => {
     spotlight.setLevel(level);
@@ -262,7 +253,6 @@ export function activate(context: vscode.ExtensionContext): unknown {
     }),
     vscode.workspace.onDidChangeTextDocument((e) => {
       handleDocumentChange(e, repo, compositor);
-      handleGuideDocumentChange(e, guideRepo, compositor);
       const active = vscode.window.activeTextEditor;
       if (active && active.document.uri.toString() === e.document.uri.toString()) {
         scheduleRefresh(active);
@@ -286,12 +276,11 @@ export function activate(context: vscode.ExtensionContext): unknown {
   return {
     _test: {
       repo,
-      guideRepo,
       segmentCache,
       compositor,
       spotlight,
       markersView,
-      entriesView,
+      entries,
       segmentsView,
       trailView,
     },

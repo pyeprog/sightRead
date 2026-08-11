@@ -25,6 +25,18 @@ suite('routePrompt: buildRoutePrompt', () => {
     assert.ok(buildRoutePrompt('g', { language: '中文' }).includes('every note in 中文.'));
     assert.ok(buildRoutePrompt('g', { language: '  ' }).includes('every note in English.'));
   });
+
+  test('cursor context is appended before the contract; absent when not given', () => {
+    const p = buildRoutePrompt('who calls it?', undefined, {
+      filePath: 'src/core/trail.ts',
+      subjectName: 'nodeAt',
+      startLine: 141,
+      endLine: 155,
+    });
+    assert.ok(p.includes("cursor was on nodeAt in src/core/trail.ts (lines 141-155)"));
+    assert.ok(p.indexOf('cursor was on') < p.indexOf('The output rules below are fixed'));
+    assert.ok(!buildRoutePrompt('who calls it?').includes('cursor was on'));
+  });
 });
 
 suite('routePrompt: buildTracePrompt', () => {

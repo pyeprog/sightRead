@@ -52,56 +52,57 @@
         "icon": "$(sparkle)"
       },
       {
-        "command": "sightread.guideFilterRoles",
-        "title": "Filter Guide Steps by Role…",
+        "command": "sightread.planRoute",
+        "title": "Find Logic Routes (AI)",
         "category": "SightRead",
-        "icon": "$(filter)"
+        "icon": "$(map)"
       },
       {
-        "command": "sightread.guideFilterRolesActive",
-        "title": "Filter Guide Steps by Role (Filter Active)…",
+        "command": "sightread.traceEntries",
+        "title": "Trace Back to Entries (AI)",
         "category": "SightRead",
-        "icon": "$(filter-filled)"
-      },
-      {
-        "command": "sightread.removeGuide",
-        "title": "Remove Guide",
-        "category": "SightRead",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "sightread.foldSkeleton",
-        "title": "Fold Skeleton (Current Function)",
-        "category": "SightRead",
-        "icon": "$(fold)"
-      },
-      {
-        "command": "sightread.unfoldSkeleton",
-        "title": "Unfold Skeleton (Current Function)",
-        "category": "SightRead",
-        "icon": "$(unfold)"
-      },
-      {
-        "command": "sightread.markFavorite",
-        "title": "Mark Selection (Favorite Color)",
-        "category": "SightRead",
-        "icon": "$(bookmark)"
+        "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "sightread.markPickColor",
-        "title": "Mark Selection (Pick Color)…",
+        "title": "Mark Selection with Color…",
         "category": "SightRead",
         "icon": "$(symbol-color)"
       },
       {
         "command": "sightread.mark",
-        "title": "Mark Selection (Color + Note)…",
+        "title": "Mark Selection with Note…",
         "category": "SightRead",
         "icon": "$(note)"
       },
       {
+        "command": "sightread.markYellow",
+        "title": "Mark Selection: Yellow",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.markRed",
+        "title": "Mark Selection: Red",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.markGreen",
+        "title": "Mark Selection: Green",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.markBlue",
+        "title": "Mark Selection: Blue",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.markPurple",
+        "title": "Mark Selection: Purple",
+        "category": "SightRead"
+      },
+      {
         "command": "sightread.editMarkerNote",
-        "title": "Add/Edit Marker Note",
+        "title": "Edit Marker Note",
         "category": "SightRead"
       },
       {
@@ -121,9 +122,27 @@
       },
       {
         "command": "sightread.removeAllMarkers",
-        "title": "Remove All Markers & Guides (Workspace)",
+        "title": "Clear All Markers and Guides",
         "category": "SightRead",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "sightread.guideFilterRoles",
+        "title": "Filter Marks…",
+        "category": "SightRead",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "sightread.guideFilterRolesActive",
+        "title": "Filter Marks (Filter Active)…",
+        "category": "SightRead",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "sightread.removeGuide",
+        "title": "Remove Guide",
+        "category": "SightRead",
+        "icon": "$(trash)"
       },
       {
         "command": "sightread.removeMarker",
@@ -133,32 +152,49 @@
       },
       {
         "command": "sightread.editMarkerNoteItem",
-        "title": "Add/Edit Note",
+        "title": "Edit Note",
         "category": "SightRead"
       },
       {
         "command": "sightread.markSegment",
-        "title": "Mark Segment (Pick Color)…",
+        "title": "Mark…",
         "category": "SightRead"
       },
       {
         "command": "sightread.markSegmentWithNote",
-        "title": "Mark Segment (Color + Note)…",
+        "title": "Mark with Note…",
         "category": "SightRead"
       },
       {
         "command": "sightread.removeSegmentMarkers",
-        "title": "Remove Markers in Segment",
+        "title": "Remove Markers",
         "category": "SightRead"
       },
       {
-        "command": "sightread.revealLocation",
-        "title": "Reveal Location",
+        "command": "sightread.foldSegmentDeep",
+        "title": "Fold Inside",
         "category": "SightRead"
+      },
+      {
+        "command": "sightread.unfoldSegmentDeep",
+        "title": "Unfold Inside",
+        "category": "SightRead"
+      },
+      {
+        "command": "sightread.foldSkeleton",
+        "title": "Fold Skeleton",
+        "category": "SightRead",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "sightread.unfoldSkeleton",
+        "title": "Unfold Skeleton",
+        "category": "SightRead",
+        "icon": "$(unfold)"
       },
       {
         "command": "sightread.spotlightSelect",
-        "title": "Choose Spotlight Level…",
+        "title": "Spotlight: Choose Level…",
         "category": "SightRead",
         "icon": "$(eye)"
       },
@@ -169,17 +205,17 @@
       },
       {
         "command": "sightread.spotlightFunction",
-        "title": "Spotlight: Focus Current Function",
+        "title": "Spotlight: Function",
         "category": "SightRead"
       },
       {
         "command": "sightread.spotlightSegment",
-        "title": "Spotlight: Focus Current Segment",
+        "title": "Spotlight: Segment",
         "category": "SightRead"
       },
       {
         "command": "sightread.spotlightSegmentVar",
-        "title": "Spotlight: Focus Segment + Variable Uses",
+        "title": "Spotlight: Segment + Variables",
         "category": "SightRead"
       },
       {
@@ -198,38 +234,38 @@
         "category": "SightRead"
       },
       {
-        "command": "sightread.refreshEntries",
-        "title": "Refresh Entry Points",
-        "category": "SightRead",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "sightread.foldSegmentDeep",
-        "title": "Fold All Inside Segment",
+        "command": "sightread.peekEntryReferences",
+        "title": "Peek Entry References",
         "category": "SightRead"
       },
       {
-        "command": "sightread.unfoldSegmentDeep",
-        "title": "Unfold All Inside Segment",
+        "command": "sightread.revealLocation",
+        "title": "Reveal Location",
         "category": "SightRead"
       },
       {
-        "command": "sightread.trailPin",
-        "title": "Pin Current Function to Trail",
+        "command": "sightread.markersCollapseAll",
+        "title": "Collapse All",
         "category": "SightRead",
-        "icon": "$(pin)"
+        "icon": "$(collapse-all)"
       },
       {
-        "command": "sightread.trailPause",
-        "title": "Pause Trail Recording",
+        "command": "sightread.markersExpandAll",
+        "title": "Expand All",
         "category": "SightRead",
-        "icon": "$(debug-pause)"
+        "icon": "$(expand-all)"
       },
       {
-        "command": "sightread.trailResume",
-        "title": "Resume Trail Recording",
+        "command": "sightread.trailCollapseAll",
+        "title": "Collapse All",
         "category": "SightRead",
-        "icon": "$(debug-start)"
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "sightread.trailExpandAll",
+        "title": "Expand All",
+        "category": "SightRead",
+        "icon": "$(expand-all)"
       },
       {
         "command": "sightread.trailClear",
@@ -244,26 +280,8 @@
         "icon": "$(trash)"
       },
       {
-        "command": "sightread.planRoute",
-        "title": "Plan Reading Route (AI)",
-        "category": "SightRead",
-        "icon": "$(map)"
-      },
-      {
-        "command": "sightread.traceEntries",
-        "title": "Trace Entries to Current Code (AI)",
-        "category": "SightRead",
-        "icon": "$(type-hierarchy-sub)"
-      },
-      {
-        "command": "sightread.routeClear",
-        "title": "Clear Routes",
-        "category": "SightRead",
-        "icon": "$(discard)"
-      },
-      {
         "command": "sightread.trailGoToCaller",
-        "title": "Go to Caller Site",
+        "title": "Go to Call Site",
         "category": "SightRead"
       }
     ],
@@ -277,6 +295,42 @@
         "command": "sightread.mark",
         "key": "ctrl+k n",
         "mac": "cmd+k n",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markPickColor",
+        "key": "ctrl+k c",
+        "mac": "cmd+k c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markYellow",
+        "key": "ctrl+k 1",
+        "mac": "cmd+k 1",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markRed",
+        "key": "ctrl+k 2",
+        "mac": "cmd+k 2",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markGreen",
+        "key": "ctrl+k 3",
+        "mac": "cmd+k 3",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markBlue",
+        "key": "ctrl+k 4",
+        "mac": "cmd+k 4",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sightread.markPurple",
+        "key": "ctrl+k 5",
+        "mac": "cmd+k 5",
         "when": "editorTextFocus"
       },
       {
@@ -316,11 +370,6 @@
     "views": {
       "sightread": [
         {
-          "id": "sightread.entriesView",
-          "name": "Entry Points",
-          "icon": "$(sign-in)"
-        },
-        {
           "id": "sightread.segmentsView",
           "name": "Segments",
           "icon": "$(list-tree)"
@@ -340,11 +389,17 @@
     "viewsWelcome": [
       {
         "view": "sightread.markersView",
-        "contents": "No markers yet. Select lines in the editor and mark them, or let AI lay out reading signposts for the current function, class or file.\n[Mark Selection](command:sightread.mark)\n[Interpret Current (AI)](command:sightread.interpretFunction)"
+        "when": "isMac",
+        "contents": "$(bookmark) Mark the selection — ⌘K 1 yellow · ⌘K 2 red · ⌘K C any color · ⌘K N color + note.\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
+      },
+      {
+        "view": "sightread.markersView",
+        "when": "!isMac",
+        "contents": "$(bookmark) Mark the selection — Ctrl+K 1 yellow · Ctrl+K 2 red · Ctrl+K C any color · Ctrl+K N color + note.\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
       },
       {
         "view": "sightread.trailView",
-        "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nOr let AI lay out a route — type a reading goal, or trace the code under the cursor back to its entries. Planned hops appear dim and light up as you actually read them.\n[Plan Reading Route (AI)](command:sightread.planRoute)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
+        "contents": "Definition and reference jumps you make while this view is open build the call tree you walked.\n$(map) The button above finds logic routes (AI): type a goal, get a planned path that lights up as you read."
       }
     ],
     "walkthroughs": [
@@ -368,13 +423,13 @@
           {
             "id": "mark",
             "title": "Mark what matters",
-            "description": "Select lines and drop a marker in your favorite color — right-click for other colors or to attach a note. Markers persist with the workspace and survive edits.\n[Mark Selection](command:sightread.markFavorite)",
+            "description": "Select lines and mark them in one of five colors — the editor's right-click menu has the color and note variants, and each color has its own command for a custom keybinding.\n[Mark Selection](command:sightread.markPickColor)",
             "media": {
               "svg": "media/walkthrough/mark.svg",
               "altText": "Code lines carrying yellow, red and green markers, the yellow one with a note"
             },
             "completionEvents": [
-              "onCommand:sightread.markFavorite"
+              "onCommand:sightread.markPickColor"
             ]
           },
           {
@@ -416,10 +471,10 @@
           {
             "id": "entries",
             "title": "Start from the entrances",
-            "description": "Entry Points lists what the outside world calls in this file, and chevrons in the gutter mark them in place. Dimmed chevrons are suspected entries — no references found.\n[Go to Entry Point](command:sightread.goToEntry)",
+            "description": "Entry points are what the outside world calls in this file. A CodeLens above each one counts its external references — click it to peek them, or list every entry at once.\n[Go to Entry Point](command:sightread.goToEntry)",
             "media": {
               "svg": "media/walkthrough/entries.svg",
-              "altText": "Gutter chevrons marking entry declarations, one dimmed as suspected"
+              "altText": "Entry declarations annotated with reference counts, one dimmed as suspected"
             },
             "completionEvents": [
               "onCommand:sightread.goToEntry"
@@ -469,6 +524,10 @@
           "when": "false"
         },
         {
+          "command": "sightread.peekEntryReferences",
+          "when": "false"
+        },
+        {
           "command": "sightread.foldSegmentDeep",
           "when": "false"
         },
@@ -485,20 +544,23 @@
           "when": "false"
         },
         {
-          "command": "sightread.trailPause",
-          "when": "!sightread.trailPaused"
+          "command": "sightread.markersCollapseAll",
+          "when": "false"
         },
         {
-          "command": "sightread.trailResume",
-          "when": "sightread.trailPaused"
+          "command": "sightread.markersExpandAll",
+          "when": "false"
+        },
+        {
+          "command": "sightread.trailCollapseAll",
+          "when": "false"
+        },
+        {
+          "command": "sightread.trailExpandAll",
+          "when": "false"
         }
       ],
       "view/title": [
-        {
-          "command": "sightread.refreshEntries",
-          "when": "view == sightread.entriesView",
-          "group": "navigation@1"
-        },
         {
           "command": "sightread.spotlightSelect",
           "when": "view == sightread.segmentsView",
@@ -515,7 +577,7 @@
           "group": "navigation@2"
         },
         {
-          "command": "sightread.markFavorite",
+          "command": "sightread.interpretFunction",
           "when": "view == sightread.markersView",
           "group": "navigation@1"
         },
@@ -525,60 +587,55 @@
           "group": "navigation@2"
         },
         {
-          "command": "sightread.interpretFunction",
-          "when": "view == sightread.markersView",
-          "group": "navigation@3"
-        },
-        {
           "command": "sightread.guideFilterRoles",
           "when": "view == sightread.markersView && !sightread.guideFilterActive",
-          "group": "navigation@4"
+          "group": "navigation@3"
         },
         {
           "command": "sightread.guideFilterRolesActive",
           "when": "view == sightread.markersView && sightread.guideFilterActive",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sightread.markersCollapseAll",
+          "when": "view == sightread.markersView && !sightread.markersFolded",
+          "group": "navigation@4"
+        },
+        {
+          "command": "sightread.markersExpandAll",
+          "when": "view == sightread.markersView && sightread.markersFolded",
           "group": "navigation@4"
         },
         {
           "command": "sightread.removeAllMarkers",
           "when": "view == sightread.markersView",
-          "group": "navigation@5"
+          "group": "1_manage@1"
         },
         {
-          "command": "sightread.trailPause",
-          "when": "view == sightread.trailView && !sightread.trailPaused",
-          "group": "navigation@1"
-        },
-        {
-          "command": "sightread.trailResume",
-          "when": "view == sightread.trailView && sightread.trailPaused",
-          "group": "navigation@1"
-        },
-        {
-          "command": "sightread.trailPin",
+          "command": "sightread.planRoute",
           "when": "view == sightread.trailView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sightread.trailCollapseAll",
+          "when": "view == sightread.trailView && !sightread.trailFolded",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sightread.trailExpandAll",
+          "when": "view == sightread.trailView && sightread.trailFolded",
           "group": "navigation@2"
         },
         {
           "command": "sightread.trailClear",
           "when": "view == sightread.trailView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "sightread.planRoute",
-          "when": "view == sightread.trailView",
-          "group": "navigation@4"
-        },
-        {
-          "command": "sightread.routeClear",
-          "when": "view == sightread.trailView",
-          "group": "1_route@1"
+          "group": "1_manage@1"
         }
       ],
       "view/item/context": [
         {
           "command": "sightread.removeMarker",
-          "when": "view == sightread.markersView && viewItem == marker",
+          "when": "view == sightread.markersView && viewItem == mark",
           "group": "inline"
         },
         {
@@ -588,8 +645,8 @@
         },
         {
           "command": "sightread.editMarkerNoteItem",
-          "when": "view == sightread.markersView && viewItem == marker",
-          "group": "1_note@1"
+          "when": "view == sightread.markersView && viewItem == mark",
+          "group": "1_edit@1"
         },
         {
           "command": "sightread.markSegment",
@@ -602,19 +659,19 @@
           "group": "1_mark@2"
         },
         {
-          "command": "sightread.removeSegmentMarkers",
-          "when": "view == sightread.segmentsView",
-          "group": "2_remove@1"
-        },
-        {
           "command": "sightread.foldSegmentDeep",
           "when": "view == sightread.segmentsView",
-          "group": "3_fold@1"
+          "group": "2_view@1"
         },
         {
           "command": "sightread.unfoldSegmentDeep",
           "when": "view == sightread.segmentsView",
-          "group": "3_fold@2"
+          "group": "2_view@2"
+        },
+        {
+          "command": "sightread.removeSegmentMarkers",
+          "when": "view == sightread.segmentsView",
+          "group": "3_remove@1"
         },
         {
           "command": "sightread.trailRemove",
@@ -643,20 +700,16 @@
           "group": "0_ai@2"
         },
         {
-          "command": "sightread.markFavorite",
+          "command": "sightread.markPickColor",
           "group": "1_mark@1"
         },
         {
-          "command": "sightread.markPickColor",
+          "command": "sightread.mark",
           "group": "1_mark@2"
         },
         {
-          "command": "sightread.mark",
-          "group": "1_mark@3"
-        },
-        {
           "command": "sightread.editMarkerNote",
-          "group": "1_mark@4"
+          "group": "1_mark@3"
         },
         {
           "command": "sightread.removeMarkersInSelection",
@@ -665,6 +718,10 @@
         {
           "command": "sightread.removeMarkersInFunction",
           "group": "2_remove@2"
+        },
+        {
+          "command": "sightread.removeMarkersInFile",
+          "group": "2_remove@3"
         },
         {
           "command": "sightread.foldSkeleton",
@@ -693,262 +750,294 @@
         "id": "sightread.markerYellow",
         "description": "Label color of yellow-marked items in SightRead views.",
         "defaults": {
-          "dark": "#FFC828",
-          "light": "#9E7A00",
-          "highContrast": "#FFC828",
-          "highContrastLight": "#9E7A00"
+          "dark": "#D4BB30",
+          "light": "#736300",
+          "highContrast": "#D4BB30",
+          "highContrastLight": "#736300"
         }
       },
       {
         "id": "sightread.markerRed",
         "description": "Label color of red-marked items in SightRead views.",
         "defaults": {
-          "dark": "#FF6363",
-          "light": "#D13438",
-          "highContrast": "#FF6363",
-          "highContrastLight": "#D13438"
+          "dark": "#FF9A97",
+          "light": "#A43A3D",
+          "highContrast": "#FF9A97",
+          "highContrastLight": "#A43A3D"
         }
       },
       {
         "id": "sightread.markerGreen",
         "description": "Label color of green-marked items in SightRead views.",
         "defaults": {
-          "dark": "#58C878",
-          "light": "#2E8B57",
-          "highContrast": "#58C878",
-          "highContrastLight": "#2E8B57"
+          "dark": "#65D68A",
+          "light": "#00773B",
+          "highContrast": "#65D68A",
+          "highContrastLight": "#00773B"
         }
       },
       {
         "id": "sightread.markerBlue",
         "description": "Label color of blue-marked items in SightRead views.",
         "defaults": {
-          "dark": "#5A9CFF",
-          "light": "#2F6BD8",
-          "highContrast": "#5A9CFF",
-          "highContrastLight": "#2F6BD8"
+          "dark": "#8FBCFF",
+          "light": "#2A61B1",
+          "highContrast": "#8FBCFF",
+          "highContrastLight": "#2A61B1"
         }
       },
       {
         "id": "sightread.markerPurple",
         "description": "Label color of purple-marked items in SightRead views.",
         "defaults": {
-          "dark": "#BB86FC",
-          "light": "#8250DF",
-          "highContrast": "#BB86FC",
-          "highContrastLight": "#8250DF"
+          "dark": "#C7A8FF",
+          "light": "#714CA6",
+          "highContrast": "#C7A8FF",
+          "highContrastLight": "#714CA6"
         }
       },
       {
         "id": "sightread.guidePrimary",
         "description": "Label color of items covered by primary-role guide steps (main/entry/core) in SightRead views.",
         "defaults": {
-          "dark": "#FF963C",
-          "light": "#BF5B16",
-          "highContrast": "#FF963C",
-          "highContrastLight": "#BF5B16"
+          "dark": "#FFA05C",
+          "light": "#974C00",
+          "highContrast": "#FFA05C",
+          "highContrastLight": "#974C00"
         }
       },
       {
         "id": "sightread.guideEntity",
         "description": "Label color of items covered by entity/state guide steps in SightRead views.",
         "defaults": {
-          "dark": "#FF6EBE",
-          "light": "#C4267E",
-          "highContrast": "#FF6EBE",
-          "highContrastLight": "#C4267E"
+          "dark": "#FD91D0",
+          "light": "#983C75",
+          "highContrast": "#FD91D0",
+          "highContrastLight": "#983C75"
         }
       },
       {
         "id": "sightread.guideSetup",
         "description": "Label color of items covered by setup/config/lifecycle guide steps in SightRead views.",
         "defaults": {
-          "dark": "#6EAAFF",
-          "light": "#2F6BD8",
-          "highContrast": "#6EAAFF",
-          "highContrastLight": "#2F6BD8"
+          "dark": "#6DC4FF",
+          "light": "#006A9D",
+          "highContrast": "#6DC4FF",
+          "highContrastLight": "#006A9D"
         }
       },
       {
         "id": "sightread.guidePlumbing",
         "description": "Label color of items covered by fallback/util guide steps in SightRead views.",
         "defaults": {
-          "dark": "#9696A5",
-          "light": "#6B6B7B",
-          "highContrast": "#9696A5",
-          "highContrastLight": "#6B6B7B"
+          "dark": "#AEBBD5",
+          "light": "#58637B",
+          "highContrast": "#AEBBD5",
+          "highContrastLight": "#58637B"
         }
       },
       {
         "id": "sightread.guideSpecial",
         "description": "Label color of items covered by special/wiring guide steps in SightRead views.",
         "defaults": {
-          "dark": "#5AC8F5",
-          "light": "#0E7CA8",
-          "highContrast": "#5AC8F5",
-          "highContrastLight": "#0E7CA8"
+          "dark": "#00D0F2",
+          "light": "#006F83",
+          "highContrast": "#00D0F2",
+          "highContrastLight": "#006F83"
         }
       },
       {
         "id": "sightread.guideAccent",
         "description": "Label color of items covered by neutral or unknown-role guide steps in SightRead views.",
         "defaults": {
-          "dark": "#4EC9B0",
-          "light": "#147A64",
-          "highContrast": "#4EC9B0",
-          "highContrastLight": "#147A64"
+          "dark": "#19D9AF",
+          "light": "#00755D",
+          "highContrast": "#19D9AF",
+          "highContrastLight": "#00755D"
         }
       },
       {
         "id": "sightread.guideExports",
         "description": "Label color of items covered by exports guide steps in SightRead views.",
         "defaults": {
-          "dark": "#FFCD5A",
-          "light": "#9E7A00",
-          "highContrast": "#FFCD5A",
-          "highContrastLight": "#9E7A00"
+          "dark": "#EFAD32",
+          "light": "#835A00",
+          "highContrast": "#EFAD32",
+          "highContrastLight": "#835A00"
         }
       }
     ],
-    "configuration": {
-      "title": "SightRead",
-      "properties": {
-        "sightread.guide.harness": {
-          "type": "string",
-          "default": "auto",
-          "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `devin`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
-        },
-        "sightread.guide.customHarnesses": {
-          "type": "object",
-          "default": {},
-          "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `exploreArgs` — argument array for read-only repository exploration; declaring it enables route planning *(optional)*\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
-        },
-        "sightread.guide.model": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Model for AI runs, appended to every harness invocation as `--model <value>` — the one flag all builtin harnesses share. The value's vocabulary belongs to the chosen harness: `claude` takes `sonnet` / `opus` / a full model id, `opencode` and `pi` take `provider/model`, `agy` takes a model slug and fails loudly on unknown ones. Empty = each CLI's own default model (the progress notification then shows `default model`)."
-        },
-        "sightread.guide.language": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Language of the notes and summary in AI-generated guides (e.g. `简体中文`, `Japanese`, `Deutsch`). Empty = English."
-        },
-        "sightread.guide.promptTemplate.function": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a **function**.\n\nEmpty = builtin default: structure roles (main / setup / fallback / special), plus the existence-reason of at most 9 core entities.\n\nPlaceholders:\n- `${filePath}` — file path relative to the workspace\n- `${languageId}` — programming language\n- `${subjectName}` — the function's name\n- `${subjectText}` — its source with absolute line numbers\n- `${fileHeader}` — the file's import region\n- `${userNote}` — what you type into the per-run focus box\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
-        },
-        "sightread.guide.promptTemplate.class": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a **class**.\n\nEmpty = builtin default: one step per member, role-tagged (entry / helper / util / lifecycle / state), notes give the member's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the class's name and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
-        },
-        "sightread.guide.promptTemplate.file": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "Custom reading instructions when interpreting a whole **file**.\n\nEmpty = builtin default: one step per top-level block, role-tagged (config / types / core / wiring / util / exports), notes give the block's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the file's basename and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
-        },
-        "sightread.guide.promptTemplate.route": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "Custom exploration instructions when **planning a reading route** from a typed goal.\n\nEmpty = builtin default: start at an entry, follow the call/dependency chain, attach only critical side references, at most 12 hops.\n\nPlaceholder: `${goal}` — the goal typed into the input box.\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
-        },
-        "sightread.guide.promptTemplate.trace": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "Custom exploration instructions when **tracing entries** to the code under the cursor.\n\nEmpty = builtin default: find at most 3 relevant entry points and route each chain down to the queried code.\n\nPlaceholders: `${filePath}`, `${subjectName}`, `${startLine}`, `${endLine}` — the queried code's location.\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
-        },
-        "sightread.variableTint.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Outline all occurrences of the symbol under the cursor within the enclosing function (reads blue, writes orange)."
-        },
-        "sightread.spotlight.defaultMode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "seg+var",
-            "seg",
-            "fn"
-          ],
-          "enumDescriptions": [
-            "Off — no dimming",
-            "Segment+Variable — segment focus, plus segments touched by the symbol under the cursor stay lit",
-            "Segment — dim non-current segments inside the function as well as everything outside it",
-            "Function — dim everything outside the current function"
-          ],
-          "default": "off",
-          "description": "Spotlight level applied on startup."
-        },
-        "sightread.spotlight.functionDimOpacity": {
-          "type": "number",
-          "default": 0.15,
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Opacity of code outside the current function while the spotlight is on."
-        },
-        "sightread.spotlight.segmentDimOpacity": {
-          "type": "number",
-          "default": 0.4,
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Opacity of non-related parts of the current function (spotlight level 2+)."
-        },
-        "sightread.spotlight.siblingDimOpacity": {
-          "type": "number",
-          "default": 0.6,
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Opacity of sibling segments of the cursor's segment (spotlight level 2+)."
-        },
-        "sightread.entries.languageHints": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use language syntax (export/pub keywords, Go capitalization, leading-underscore naming) to classify symbols that have no references anywhere: declared-public ones become entries, declared-private ones are dropped."
-        },
-        "sightread.entries.showSuspected": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show suspected entries — symbols with no references found anywhere. These may be framework-invoked entries (activation hooks, route handlers) or dead code."
-        },
-        "sightread.entries.gutterIcons": {
-          "type": "boolean",
-          "default": true,
-          "description": "Mark entry points with a gutter icon in the editor."
-        },
-        "sightread.entries.iconColor": {
-          "type": "string",
-          "default": "#8C8C8C",
-          "description": "Color of the entry-point gutter chevrons (any CSS color, e.g. #3794FF). Suspected entries use the same color at reduced opacity."
-        },
-        "sightread.marker.favoriteColor": {
-          "type": "string",
-          "enum": [
-            "yellow",
-            "red",
-            "green",
-            "blue",
-            "purple"
-          ],
-          "default": "yellow",
-          "description": "Color used by \"Mark Selection (Favorite Color)\" — the one-click bookmark button on the Markers view and in the editor context menu."
-        },
-        "sightread.marker.notePosition": {
-          "type": "string",
-          "enum": [
-            "lineStart",
-            "lineEnd"
-          ],
-          "default": "lineEnd",
-          "description": "Where a marker's note is rendered on the first marked line. lineStart shifts the code of that line to the right."
+    "configuration": [
+      {
+        "title": "AI Guide & Routes",
+        "order": 1,
+        "properties": {
+          "sightread.guide.harness": {
+            "type": "string",
+            "default": "auto",
+            "order": 1,
+            "markdownDescription": "Which coding-agent CLI interprets functions. Accepted values:\n- `auto` *(default)* — probes the PATH and takes the first hit, in market-share order: `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` (running inside Cursor promotes `cursor` to the front)\n- a builtin harness name: `claude`, `codex`, `opencode`, `pi`, `cursor`, `devin`, `aider`, `agy`\n- the name of an entry in `#sightread.guide.customHarnesses#`"
+          },
+          "sightread.guide.model": {
+            "type": "string",
+            "default": "",
+            "order": 2,
+            "markdownDescription": "Model for AI runs, appended to every harness invocation as `--model <value>` — the one flag all builtin harnesses share. The value's vocabulary belongs to the chosen harness: `claude` takes `sonnet` / `opus` / a full model id, `opencode` and `pi` take `provider/model`, `agy` takes a model slug and fails loudly on unknown ones. Empty *(default)* = each CLI's own default model (the progress notification then shows `default model`)."
+          },
+          "sightread.guide.language": {
+            "type": "string",
+            "default": "",
+            "order": 3,
+            "markdownDescription": "Language of the notes and summary in AI-generated guides (e.g. `简体中文`, `Japanese`, `Deutsch`). Empty *(default)* = English."
+          },
+          "sightread.guide.promptTemplate.function": {
+            "type": "string",
+            "default": "",
+            "order": 4,
+            "editPresentation": "multilineText",
+            "markdownDescription": "Custom reading instructions when interpreting a **function**.\n\nEmpty *(default)* = builtin rules: structure roles (main / setup / fallback / special), plus the existence-reason of at most 9 core entities.\n\nPlaceholders:\n- `${filePath}` — file path relative to the workspace\n- `${languageId}` — programming language\n- `${subjectName}` — the function's name\n- `${subjectText}` — its source with absolute line numbers\n- `${fileHeader}` — the file's import region\n- `${userNote}` — what you type into the per-run focus box\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+          },
+          "sightread.guide.promptTemplate.class": {
+            "type": "string",
+            "default": "",
+            "order": 5,
+            "editPresentation": "multilineText",
+            "markdownDescription": "Custom reading instructions when interpreting a **class**.\n\nEmpty *(default)* = builtin rules: one step per member, role-tagged (entry / helper / util / lifecycle / state), notes give the member's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the class's name and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
+          },
+          "sightread.guide.promptTemplate.file": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "editPresentation": "multilineText",
+            "markdownDescription": "Custom reading instructions when interpreting a whole **file**.\n\nEmpty *(default)* = builtin rules: one step per top-level block, role-tagged (config / types / core / wiring / util / exports), notes give the block's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the file's basename and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
+          },
+          "sightread.guide.promptTemplate.route": {
+            "type": "string",
+            "default": "",
+            "order": 7,
+            "editPresentation": "multilineText",
+            "markdownDescription": "Custom exploration instructions when **finding logic routes** from a typed goal.\n\nEmpty *(default)* = builtin rules: start at an entry, follow the call/dependency chain, attach only critical side references, at most 12 hops.\n\nPlaceholder: `${goal}` — the goal typed into the input box. The symbol under the cursor is appended after the template, so the goal may just say \"it\".\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+          },
+          "sightread.guide.promptTemplate.trace": {
+            "type": "string",
+            "default": "",
+            "order": 8,
+            "editPresentation": "multilineText",
+            "markdownDescription": "Custom exploration instructions when **tracing entries** to the code under the cursor.\n\nEmpty *(default)* = builtin rules: find at most 3 relevant entry points and route each chain down to the queried code.\n\nPlaceholders: `${filePath}`, `${subjectName}`, `${startLine}`, `${endLine}` — the queried code's location.\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+          },
+          "sightread.guide.customHarnesses": {
+            "type": "object",
+            "default": {},
+            "order": 9,
+            "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `exploreArgs` — argument array for read-only repository exploration; declaring it enables route planning *(optional)*\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
+          }
+        }
+      },
+      {
+        "title": "Spotlight",
+        "order": 2,
+        "properties": {
+          "sightread.spotlight.defaultMode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "seg+var",
+              "seg",
+              "fn"
+            ],
+            "enumDescriptions": [
+              "Off — no dimming",
+              "Segment + Variables — the cursor's block plus blocks touched by the symbol under the cursor stay lit (recommended)",
+              "Segment — only the cursor's block stays lit",
+              "Function — everything outside the current function is dimmed"
+            ],
+            "default": "off",
+            "order": 1,
+            "markdownDescription": "Spotlight level applied on startup. Switch anytime via the status-bar eye, the Segments view button, or `SightRead: Spotlight: Choose Level…`."
+          },
+          "sightread.spotlight.functionDimOpacity": {
+            "type": "number",
+            "default": 0.15,
+            "minimum": 0,
+            "maximum": 1,
+            "order": 2,
+            "markdownDescription": "Opacity of code **outside the current function** while the spotlight is on. `0` hides it entirely, `1` disables this dim tier."
+          },
+          "sightread.spotlight.segmentDimOpacity": {
+            "type": "number",
+            "default": 0.4,
+            "minimum": 0,
+            "maximum": 1,
+            "order": 3,
+            "markdownDescription": "Opacity of **unrelated parts inside the current function** (levels Segment and up)."
+          },
+          "sightread.spotlight.siblingDimOpacity": {
+            "type": "number",
+            "default": 0.6,
+            "minimum": 0,
+            "maximum": 1,
+            "order": 4,
+            "markdownDescription": "Opacity of the **sibling blocks** of the cursor's block (levels Segment and up) — slightly brighter than the unrelated parts, keeping nearby structure readable."
+          }
+        }
+      },
+      {
+        "title": "Markers",
+        "order": 3,
+        "properties": {
+          "sightread.marker.notePosition": {
+            "type": "string",
+            "enum": [
+              "lineStart",
+              "lineEnd"
+            ],
+            "enumDescriptions": [
+              "Before the code — shifts that line's code to the right",
+              "At the end of the line, after the code"
+            ],
+            "default": "lineEnd",
+            "order": 1,
+            "markdownDescription": "Where a mark's note renders on its first marked line."
+          }
+        }
+      },
+      {
+        "title": "Entry Points",
+        "order": 4,
+        "properties": {
+          "sightread.entries.codeLens": {
+            "type": "boolean",
+            "default": true,
+            "order": 1,
+            "markdownDescription": "Show a CodeLens above each entry-point declaration (`» entry — 3 external refs`); clicking it peeks the references. Entries are the symbols the outside world calls in this file — `SightRead: Go to Entry Point…` lists them on demand."
+          },
+          "sightread.entries.showSuspected": {
+            "type": "boolean",
+            "default": true,
+            "order": 2,
+            "markdownDescription": "Also show **suspected** entries — symbols with no references found anywhere. These may be framework-invoked entries (activation hooks, route handlers) or dead code."
+          },
+          "sightread.entries.languageHints": {
+            "type": "boolean",
+            "default": true,
+            "order": 3,
+            "markdownDescription": "Use language syntax (`export`/`pub` keywords, Go capitalization, leading-underscore naming) to classify symbols that have no references anywhere: declared-public ones become entries, declared-private ones are dropped."
+          }
+        }
+      },
+      {
+        "title": "Variable Tint",
+        "order": 5,
+        "properties": {
+          "sightread.variableTint.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 1,
+            "markdownDescription": "Outline all occurrences of the symbol under the cursor within the enclosing function — reads in blue, writes in orange."
+          }
         }
       }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

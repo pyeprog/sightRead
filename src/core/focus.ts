@@ -24,6 +24,9 @@ export type SpotlightLevel = 0 | 1 | 2 | 3;
 
 export const SPOTLIGHT_LEVEL_NAMES = ['Off', 'Function', 'Segment', 'Segment+Var'] as const;
 
+/** Compact forms for the Segments view's one-line message. */
+export const SPOTLIGHT_LEVEL_SHORT = ['Off', 'Fn', 'Seg', 'Seg+Var'] as const;
+
 export interface FocusTiers {
   /** fully lit ranges */
   lit: LineRange[];

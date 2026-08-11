@@ -1,17 +1,11 @@
 import * as vscode from 'vscode';
-import { SPOTLIGHT_LEVEL_NAMES, SpotlightLevel, intersectsAny, pathToLine } from '../core/focus';
-import { GuideStep, stepVisible, stepsInLineRange } from '../core/guide';
-import { markersInLineRange, removeInLineRange } from '../core/markers';
+import { SPOTLIGHT_LEVEL_SHORT, SpotlightLevel, intersectsAny, pathToLine } from '../core/focus';
+import { Mark, markVisible, marksInLineRange, removeMarksInRange } from '../core/marks';
 import { SegmentKind } from '../core/segmentation';
 import { Compositor, SpotlightRender } from './compositor';
-import type { GuideRepository } from './guideFeature';
-import {
-  MarkerRepository,
-  addLineMarker,
-  pickMarkerColor,
-  promptMarkerNote,
-} from './highlighter';
-import { guideRoleThemeColor, markerThemeColor } from './palette';
+import { addLineMarker, pickMarkerColor, promptMarkerNote } from './highlighter';
+import { MarkRepository } from './markRepository';
+import { accentThemeColor } from './palette';
 import { DocSegmentNode, SegmentCache } from './segmentCache';
 import { FunctionInfo, findFunctionAtCursor } from './symbols';
 
@@ -110,16 +104,18 @@ export class SegmentsViewFeature
   readonly onDidChangeFileDecorations = this.decoEmitter.event;
   private subscriptions: vscode.Disposable[] = [];
 
+  /** current spotlight level — always shown in the view message */
+  private spotlightLevel: SpotlightLevel = 0;
+
   constructor(
-    private repo: MarkerRepository,
-    private guideRepo: GuideRepository,
+    private repo: MarkRepository,
     private compositor: Compositor,
   ) {
     this.view = vscode.window.createTreeView('sightread.segmentsView', {
       treeDataProvider: this,
     });
-    // marker/guide mutations and role-filter changes re-tint labels
-    // (decorations) and icons (tree items)
+    // mark mutations and filter changes re-tint labels (decorations) and
+    // icons (tree items)
     const retint = (): void => {
       this.emitter.fire();
       this.decoEmitter.fire(undefined);
@@ -133,10 +129,10 @@ export class SegmentsViewFeature
       this.view.onDidExpandElement((e) => this.syncCodeFold(e.element, 'editor.unfold')),
       vscode.window.registerFileDecorationProvider(this),
       repo.onDidChange(retint),
-      guideRepo.onDidChange(retint),
-      compositor.onDidChangeHiddenGuideRoles(retint),
+      compositor.onDidChangeHiddenAccents(retint),
     );
     void vscode.commands.executeCommand('setContext', 'sightread.skeletonFolded', false);
+    this.syncMessage();
   }
 
   /** Tracks defaultCollapsed and mirrors it into the when-clause context that
@@ -149,19 +145,15 @@ export class SegmentsViewFeature
     void vscode.commands.executeCommand('setContext', 'sightread.skeletonFolded', folded);
   }
 
-  /** Whether any marker or visible guide step intersects the segment's line range ("相交即染"). */
+  /** Whether any visible mark intersects the segment's line range ("相交即染"). */
   private isMarked(uriString: string, node: DocSegmentNode): boolean {
-    const uri = vscode.Uri.parse(uriString);
-    return (
-      markersInLineRange(this.repo.get(uri), node.startLine, node.endLine).length > 0 ||
-      this.visibleStepsIn(uri, node.startLine, node.endLine).length > 0
-    );
+    return this.visibleMarksIn(vscode.Uri.parse(uriString), node.startLine, node.endLine).length > 0;
   }
 
-  /** Guide steps intersecting the range, minus role-filtered ones (hidden everywhere). */
-  private visibleStepsIn(uri: vscode.Uri, startLine: number, endLine: number): GuideStep[] {
-    return stepsInLineRange(this.guideRepo.get(uri), startLine, endLine).filter((s) =>
-      stepVisible(s.role, this.compositor.getHiddenGuideRoles()),
+  /** Marks intersecting the range, minus filtered accents (hidden everywhere). */
+  private visibleMarksIn(uri: vscode.Uri, startLine: number, endLine: number): Mark[] {
+    return marksInLineRange(this.repo.get(uri).marks, startLine, endLine).filter((m) =>
+      markVisible(m.accent, this.compositor.getHiddenAccents()),
     );
   }
 
@@ -190,12 +182,19 @@ export class SegmentsViewFeature
     this.emitter.fire();
   }
 
-  /** Spotlight level shown as a number badge on the activity-bar icon. */
+  /** Spotlight level lives in the view message — the always-visible mode line. */
   setSpotlightLevel(level: SpotlightLevel): void {
-    this.view.badge =
-      level > 0
-        ? { value: level, tooltip: `Spotlight: ${SPOTLIGHT_LEVEL_NAMES[level]}` }
-        : undefined;
+    this.spotlightLevel = level;
+    this.syncMessage();
+  }
+
+  /** One message line, two glyph-led fields: spotlight level (◉ lit / ○ off)
+   *  and whether the cursor is inside a function. Codicons don't render in
+   *  tree-view messages (plain string only), hence the unicode glyphs. */
+  private syncMessage(): void {
+    const glyph = this.spotlightLevel === 0 ? '○' : '◉';
+    const level = SPOTLIGHT_LEVEL_SHORT[this.spotlightLevel];
+    this.view.message = `${glyph} ${level} · ${this.current ? 'in function' : 'outside function'}`;
   }
 
   update(
@@ -228,13 +227,8 @@ export class SegmentsViewFeature
       this.currentKey = key;
       this.setFolded(false);
     }
-    if (!fn) {
-      this.view.message = 'Place the cursor inside a function to see its segments.';
-      this.view.description = undefined;
-    } else {
-      this.view.message = undefined;
-      this.view.description = fn.name;
-    }
+    this.view.description = fn ? fn.name : undefined;
+    this.syncMessage();
     this.emitter.fire();
     this.decoEmitter.fire(undefined);
   }
@@ -274,17 +268,15 @@ export class SegmentsViewFeature
     // the segment's line range travels in the URI (path `/start-end`, query = doc uri)
     const range = /^\/(\d+)-(\d+)$/.exec(uri.path);
     if (range) {
-      const docUri = vscode.Uri.parse(uri.query);
-      const start = Number(range[1]);
-      const end = Number(range[2]);
-      const marker = markersInLineRange(this.repo.get(docUri), start, end)[0];
-      if (marker) {
-        return { color: markerThemeColor(marker.color) }; // marker tint wins over dim
-      }
-      // AI guide steps tint exactly like manual markers (manual wins on overlap)
-      const step = this.visibleStepsIn(docUri, start, end)[0];
-      if (step) {
-        return { color: guideRoleThemeColor(step.role) };
+      const marks = this.visibleMarksIn(
+        vscode.Uri.parse(uri.query),
+        Number(range[1]),
+        Number(range[2]),
+      );
+      // manual color wins over a role accent on overlap (human judgment first)
+      const mark = marks.find((m) => m.accent.kind === 'color') ?? marks[0];
+      if (mark) {
+        return { color: accentThemeColor(mark.accent) }; // mark tint wins over dim
       }
     }
     return this.dimmedUris.has(uri.toString()) ? { color: DIM_COLOR } : undefined;
@@ -366,7 +358,7 @@ export class SegmentsViewFeature
 /** Right-click mark/unmark on Segments-view items (menus in package.json). */
 export function registerSegmentMarkCommands(
   context: vscode.ExtensionContext,
-  repo: MarkerRepository,
+  repo: MarkRepository,
   compositor: Compositor,
 ): void {
   const docFor = async (el: SegmentElement): Promise<vscode.TextDocument> =>
@@ -406,8 +398,7 @@ export function registerSegmentMarkCommands(
         return;
       }
       const uri = vscode.Uri.parse(el.uriString);
-      const { markers } = removeInLineRange(repo.get(uri), el.node.startLine, el.node.endLine);
-      repo.set(uri, markers);
+      repo.set(uri, removeMarksInRange(repo.get(uri), el.node.startLine, el.node.endLine));
       compositor.renderVisibleFor(uri);
     }),
   );

@@ -260,14 +260,13 @@ suite('trail: planned route', () => {
     assert.strictEqual(g.inDegree(n('shared').key), 2);
   });
 
-  test('clearPlanned removes every route: planned nodes, edges, badges and the registry', () => {
+  test('clear wipes routes along with the walked graph — one exit for everything', () => {
     const g = new TrailGraph();
     g.recordEdge(n('a'), n('b'), 1);
     g.seedRoute([hop('a', { core: true }), hop('c', { calledFrom: 0, callsiteLine: 7 })], 'goal');
-    g.clearPlanned();
-    assert.strictEqual(g.node(n('c').key), undefined);
-    assert.deepStrictEqual(g.children(n('a').key).map((c) => c.node.name), ['b']);
-    assert.strictEqual(g.node(n('a').key)?.routeCore, undefined);
+    g.clear();
+    assert.deepStrictEqual(g.roots(), []);
+    assert.strictEqual(g.node(n('a').key), undefined);
     assert.strictEqual(g.routeOf(n('a').key), undefined);
   });
 });

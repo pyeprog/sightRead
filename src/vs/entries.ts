@@ -14,59 +14,8 @@ const FIRE_THROTTLE_MS = 80;
 const MAX_CONCURRENT_REF_QUERIES = 6;
 const MAX_CACHED_SCANS = 8;
 
-const DEFAULT_ICON_COLOR = '#8C8C8C';
-const SUSPECTED_ICON_OPACITY = 0.55;
-
-/** double chevron » — "enter here"; suspected entries reuse it dimmed */
-function chevronSvg(color: string, opacity: number): string {
-  const chevron = (x1: number, x2: number): string =>
-    `<path d="M${x1} 3.8 ${x2} 8l-4.2 4.2" fill="none" stroke="${color}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>`;
-  const dim = opacity < 1 ? ` opacity="${opacity}"` : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"${dim}>${chevron(3.5, 7.7)}${chevron(8.6, 12.8)}</svg>`;
-}
-
-/** any plain CSS color is fine; reject anything that could break out of the SVG attribute */
-function sanitizeColor(color: string): string {
-  return /^[-#a-zA-Z0-9(),.%\s]+$/.test(color.trim()) ? color.trim() : DEFAULT_ICON_COLOR;
-}
-
-/** container symbols whose function-like members are classified lazily on expand */
-const CONTAINER_KINDS = new Set<vscode.SymbolKind>([
-  vscode.SymbolKind.Class,
-  vscode.SymbolKind.Interface,
-  vscode.SymbolKind.Struct,
-  vscode.SymbolKind.Namespace,
-  vscode.SymbolKind.Module,
-  vscode.SymbolKind.Object,
-  vscode.SymbolKind.Enum,
-]);
-
-const MEMBER_KINDS = new Set<vscode.SymbolKind>([
-  vscode.SymbolKind.Function,
-  vscode.SymbolKind.Method,
-  vscode.SymbolKind.Constructor,
-  vscode.SymbolKind.Class,
-  vscode.SymbolKind.Interface,
-]);
-
-const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
-  [vscode.SymbolKind.Module]: 'symbol-namespace',
-  [vscode.SymbolKind.Namespace]: 'symbol-namespace',
-  [vscode.SymbolKind.Package]: 'symbol-package',
-  [vscode.SymbolKind.Class]: 'symbol-class',
-  [vscode.SymbolKind.Method]: 'symbol-method',
-  [vscode.SymbolKind.Property]: 'symbol-property',
-  [vscode.SymbolKind.Field]: 'symbol-field',
-  [vscode.SymbolKind.Constructor]: 'symbol-method',
-  [vscode.SymbolKind.Enum]: 'symbol-enum',
-  [vscode.SymbolKind.Interface]: 'symbol-interface',
-  [vscode.SymbolKind.Function]: 'symbol-function',
-  [vscode.SymbolKind.Variable]: 'symbol-variable',
-  [vscode.SymbolKind.Constant]: 'symbol-constant',
-  [vscode.SymbolKind.Struct]: 'symbol-structure',
-  [vscode.SymbolKind.Event]: 'symbol-event',
-  [vscode.SymbolKind.Object]: 'symbol-namespace',
-};
+/** documents the lens runs on — editors, not output panes or settings */
+const LENS_SELECTOR: vscode.DocumentSelector = [{ scheme: 'file' }, { scheme: 'untitled' }];
 
 export interface EntrySymbol {
   scan: Scan;
@@ -80,12 +29,8 @@ export interface EntrySymbol {
   alias?: boolean;
   /** declaredPublic came from a `__main__` guard — described as "script entry" */
   scriptEntry?: boolean;
-  /** function-like children of a container symbol, classified on expand */
-  members: EntrySymbol[];
   /** undefined while the reference query is pending */
   evidence?: { externalRefs: number; wrappedRefs: number; scriptRefs: number };
-  /** in-flight lazy classification of `members` */
-  membersScan?: Promise<void>;
 }
 
 interface Scan {
@@ -94,7 +39,7 @@ interface Scan {
   languageId: string;
   /** top-level symbols; populated once document symbols arrive */
   symbols: EntrySymbol[];
-  /** resolves when every top-level symbol has evidence */
+  /** resolves when every symbol has evidence */
   done: Promise<void>;
   finished: boolean;
 }
@@ -118,96 +63,99 @@ function basename(uriString: string): string {
   return path.split('/').pop() ?? path;
 }
 
+const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
+  [vscode.SymbolKind.Module]: 'symbol-namespace',
+  [vscode.SymbolKind.Namespace]: 'symbol-namespace',
+  [vscode.SymbolKind.Package]: 'symbol-package',
+  [vscode.SymbolKind.Class]: 'symbol-class',
+  [vscode.SymbolKind.Method]: 'symbol-method',
+  [vscode.SymbolKind.Property]: 'symbol-property',
+  [vscode.SymbolKind.Field]: 'symbol-field',
+  [vscode.SymbolKind.Constructor]: 'symbol-method',
+  [vscode.SymbolKind.Enum]: 'symbol-enum',
+  [vscode.SymbolKind.Interface]: 'symbol-interface',
+  [vscode.SymbolKind.Function]: 'symbol-function',
+  [vscode.SymbolKind.Variable]: 'symbol-variable',
+  [vscode.SymbolKind.Constant]: 'symbol-constant',
+  [vscode.SymbolKind.Struct]: 'symbol-structure',
+  [vscode.SymbolKind.Event]: 'symbol-event',
+  [vscode.SymbolKind.Object]: 'symbol-namespace',
+};
+
 /**
- * "Entry Points" sidebar: the file's top-level symbols classified by where
- * their references live (core/entries.ts). Scans are version-cached per
- * document and run only while the view is visible or gutter icons are on;
- * the symbol list renders immediately and verdicts stream in as the
+ * The entry-points engine: the file's top-level symbols classified by where
+ * their references live (core/entries.ts). Two consumers, no sidebar view:
+ * a CodeLens above each entry declaration (`» entry — 3 external refs`,
+ * click peeks the references) and the `Go to Entry Point…` quick pick.
+ * Scans are version-cached per document; the lens streams in as the
  * reference queries complete.
  */
-export class EntriesViewFeature
-  implements vscode.TreeDataProvider<EntrySymbol>, vscode.Disposable
-{
-  private emitter = new vscode.EventEmitter<EntrySymbol | undefined>();
-  readonly onDidChangeTreeData = this.emitter.event;
-  private view: vscode.TreeView<EntrySymbol>;
+export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposable {
+  /** refires quick-pick refills and codelens refreshes as evidence streams in */
+  private emitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeCodeLenses = this.emitter.event;
   private scans = new Map<string, Scan>();
-  private debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  private rescanTimer: ReturnType<typeof setTimeout> | undefined;
   private fireTimer: ReturnType<typeof setTimeout> | undefined;
-  private entryDeco: vscode.TextEditorDecorationType;
-  private suspectedDeco: vscode.TextEditorDecorationType;
   private subscriptions: vscode.Disposable[] = [];
 
   constructor() {
-    [this.entryDeco, this.suspectedDeco] = this.buildDecoTypes();
-    this.view = vscode.window.createTreeView('sightread.entriesView', {
-      treeDataProvider: this,
-    });
     this.subscriptions.push(
-      this.view,
-      this.view.onDidChangeVisibility((e) => {
-        if (e.visible) {
-          this.scheduleScan(0);
-        }
-      }),
-      vscode.window.onDidChangeActiveTextEditor(() => this.scheduleScan(0)),
-      vscode.workspace.onDidChangeTextDocument((e) => {
-        const active = vscode.window.activeTextEditor;
-        if (active && active.document.uri.toString() === e.document.uri.toString()) {
-          this.scheduleScan(SCAN_DEBOUNCE_MS);
-        }
-      }),
+      vscode.languages.registerCodeLensProvider(LENS_SELECTOR, this),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('sightread.entries')) {
-          this.rebuildDecoTypes();
-          this.scheduleScan(0);
+          this.fireSoon();
         }
       }),
     );
-    this.scheduleScan(0);
   }
 
   private cfg<T>(key: string, dflt: T): T {
     return vscode.workspace.getConfiguration('sightread').get(`entries.${key}`, dflt);
   }
 
-  private buildDecoTypes(): [vscode.TextEditorDecorationType, vscode.TextEditorDecorationType] {
-    const color = sanitizeColor(this.cfg('iconColor', DEFAULT_ICON_COLOR));
-    const make = (opacity: number): vscode.TextEditorDecorationType =>
-      vscode.window.createTextEditorDecorationType({
-        gutterIconPath: vscode.Uri.parse(
-          `data:image/svg+xml;base64,${Buffer.from(chevronSvg(color, opacity)).toString('base64')}`,
-        ),
-        gutterIconSize: 'contain',
-      });
-    return [make(1), make(SUSPECTED_ICON_OPACITY)];
-  }
-
-  /** disposing a decoration type clears it from every editor — safe to swap live */
-  private rebuildDecoTypes(): void {
-    this.entryDeco.dispose();
-    this.suspectedDeco.dispose();
-    [this.entryDeco, this.suspectedDeco] = this.buildDecoTypes();
-    this.renderDecorations();
-  }
-
-  /** scanning is gated on someone actually consuming the result */
-  private get watching(): boolean {
-    return this.view.visible || this.cfg('gutterIcons', true);
-  }
-
-  private scheduleScan(delayMs: number): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
+  provideCodeLenses(doc: vscode.TextDocument): vscode.CodeLens[] {
+    if (!this.cfg('codeLens', true)) {
+      return [];
     }
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = undefined;
-      const editor = vscode.window.activeTextEditor;
-      if (editor && this.watching) {
-        this.ensureScan(editor.document);
-      }
-      this.fireSoon();
-    }, delayMs);
+    const cached = this.scans.get(doc.uri.toString());
+    if (!cached) {
+      this.ensureScan(doc);
+    } else if (cached.version !== doc.version) {
+      // keep showing the stale lenses; rescan once the typing settles
+      this.scheduleRescan(doc);
+    }
+    const scan = this.scans.get(doc.uri.toString());
+    if (!scan) {
+      return [];
+    }
+    return this.visibleSymbols(scan.symbols)
+      .filter((s) => s.evidence)
+      .map((s) => {
+        const line = s.selectionRange.start.line;
+        return new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
+          title: this.lensTitle(s),
+          command: 'sightread.peekEntryReferences',
+          arguments: [scan.uriString, line, s.selectionRange.start.character],
+        });
+      });
+  }
+
+  private lensTitle(s: EntrySymbol): string {
+    const verdict = this.verdictOf(s);
+    return verdict === 'suspected'
+      ? `» suspected entry — ${this.describe(s, verdict)}`
+      : `» entry — ${this.describe(s, verdict)}`;
+  }
+
+  private scheduleRescan(doc: vscode.TextDocument): void {
+    if (this.rescanTimer) {
+      clearTimeout(this.rescanTimer);
+    }
+    this.rescanTimer = setTimeout(() => {
+      this.rescanTimer = undefined;
+      this.ensureScan(doc);
+    }, SCAN_DEBOUNCE_MS);
   }
 
   /** Returns the cached scan for the document's current version, starting one if needed. */
@@ -282,12 +230,6 @@ export class EntriesViewFeature
     const range = 'location' in s ? s.location.range : s.range;
     const selectionRange = 'selectionRange' in s ? s.selectionRange : range;
     const declLine = range.start.line < doc.lineCount ? doc.lineAt(range.start.line).text : '';
-    const members =
-      CONTAINER_KINDS.has(s.kind) && 'children' in s
-        ? s.children
-            .filter((c) => MEMBER_KINDS.has(c.kind))
-            .map((c) => this.toEntrySymbol(doc, scan, exported, c))
-        : [];
     return {
       scan,
       name: s.name,
@@ -299,7 +241,6 @@ export class EntriesViewFeature
         detectDeclaredPublic(doc.languageId, declLine, s.name) ??
         (exported.has(s.name) ? true : undefined),
       alias: isImportLine(doc.languageId, declLine) || undefined,
-      members,
     };
   }
 
@@ -404,7 +345,7 @@ export class EntriesViewFeature
   }
 
   /** entries first, then still-pending, then suspected; hidden filtered out */
-  private visibleSymbols(symbols: EntrySymbol[]): EntrySymbol[] {
+  visibleSymbols(symbols: EntrySymbol[]): EntrySymbol[] {
     const showSuspected = this.cfg('showSuspected', true);
     const order = (v: EntryVerdict | undefined): number =>
       v === 'entry' ? 0 : v === undefined ? 1 : 2;
@@ -419,30 +360,7 @@ export class EntriesViewFeature
       });
   }
 
-  getTreeItem(el: EntrySymbol): vscode.TreeItem {
-    const verdict = this.verdictOf(el);
-    const item = new vscode.TreeItem(
-      el.name,
-      el.members.length > 0
-        ? vscode.TreeItemCollapsibleState.Collapsed
-        : vscode.TreeItemCollapsibleState.None,
-    );
-    item.id = `${el.scan.uriString}@${el.scan.version}:${el.range.start.line}.${el.range.start.character}:${el.name}`;
-    item.iconPath = new vscode.ThemeIcon(
-      KIND_ICONS[el.kind] ?? 'symbol-misc',
-      verdict === 'suspected' ? new vscode.ThemeColor('disabledForeground') : undefined,
-    );
-    item.description = this.describe(el, verdict);
-    item.tooltip = el.declLine.trim();
-    item.command = {
-      command: 'sightread.revealLocation',
-      title: 'Reveal',
-      arguments: [el.scan.uriString, el.selectionRange.start.line],
-    };
-    return item;
-  }
-
-  private describe(el: EntrySymbol, verdict: EntryVerdict | undefined): string {
+  describe(el: EntrySymbol, verdict: EntryVerdict | undefined): string {
     if (!el.evidence) {
       return '…';
     }
@@ -457,93 +375,6 @@ export class EntriesViewFeature
       return `${n} external ref${n === 1 ? '' : 's'}`;
     }
     return el.scriptEntry ? 'script entry' : 'exported';
-  }
-
-  getChildren(el?: EntrySymbol): EntrySymbol[] | Promise<EntrySymbol[]> {
-    if (el) {
-      return this.memberChildren(el);
-    }
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      this.view.message = 'Open a file to see its entry points.';
-      this.view.description = undefined;
-      return [];
-    }
-    this.view.description = basename(editor.document.uri.toString());
-    const scan = this.watching
-      ? this.ensureScan(editor.document)
-      : this.scans.get(editor.document.uri.toString());
-    if (!scan) {
-      this.view.message = undefined;
-      return [];
-    }
-    const visible = this.visibleSymbols(scan.symbols);
-    this.view.message = !scan.finished
-      ? undefined
-      : scan.symbols.length === 0
-        ? 'No symbols here — the language server may still be warming up.'
-        : visible.length === 0
-          ? 'No entry points — nothing in this file is referenced from outside.'
-          : undefined;
-    return visible;
-  }
-
-  /** Required by TreeView.reveal — only members have a parent. */
-  getParent(el: EntrySymbol): EntrySymbol | undefined {
-    return el.scan.symbols.find((s) => s.members.includes(el));
-  }
-
-  /**
-   * Follows the cursor: selects the top-level entry containing it, without
-   * stealing focus. Deliberately never targets members — revealing one would
-   * expand its container and trigger the lazy member classification from a
-   * mere cursor move.
-   */
-  async revealCursor(doc: vscode.TextDocument, pos: vscode.Position): Promise<void> {
-    if (!this.view.visible) {
-      return;
-    }
-    const scan = this.scans.get(doc.uri.toString());
-    if (!scan) {
-      return;
-    }
-    const target = this.visibleSymbols(scan.symbols).find(
-      (s) => s.range.start.line <= pos.line && pos.line <= s.range.end.line,
-    );
-    if (!target) {
-      return;
-    }
-    try {
-      await this.view.reveal(target, { select: true, focus: false });
-    } catch (_e) {
-      // best-effort: the scan may have refreshed mid-reveal
-    }
-  }
-
-  private async memberChildren(el: EntrySymbol): Promise<EntrySymbol[]> {
-    if (!el.membersScan) {
-      el.membersScan = (async (): Promise<void> => {
-        const doc = await vscode.workspace.openTextDocument(
-          vscode.Uri.parse(el.scan.uriString),
-        );
-        await runPool(
-          el.members.filter((m) => !m.evidence),
-          MAX_CONCURRENT_REF_QUERIES,
-          (m) => this.collectEvidence(doc, el.scan, m),
-        );
-        this.fireSoon();
-      })();
-    }
-    await el.membersScan;
-    return this.visibleSymbols(el.members);
-  }
-
-  refresh(): void {
-    const editor = vscode.window.activeTextEditor;
-    if (editor) {
-      this.ensureScan(editor.document, true);
-    }
-    this.fireSoon();
   }
 
   async quickPick(): Promise<void> {
@@ -611,50 +442,17 @@ export class EntriesViewFeature
     }
     this.fireTimer = setTimeout(() => {
       this.fireTimer = undefined;
-      this.emitter.fire(undefined);
-      this.renderDecorations();
+      this.emitter.fire();
     }, FIRE_THROTTLE_MS);
   }
 
-  private renderDecorations(): void {
-    const on = this.cfg('gutterIcons', true);
-    const showSuspected = this.cfg('showSuspected', true);
-    for (const editor of vscode.window.visibleTextEditors) {
-      const scan = this.scans.get(editor.document.uri.toString());
-      if (!on || !scan) {
-        editor.setDecorations(this.entryDeco, []);
-        editor.setDecorations(this.suspectedDeco, []);
-        continue;
-      }
-      const entries: vscode.Range[] = [];
-      const suspected: vscode.Range[] = [];
-      const collect = (syms: EntrySymbol[]): void => {
-        for (const s of syms) {
-          const v = this.verdictOf(s);
-          const line = s.selectionRange.start.line;
-          if (v === 'entry') {
-            entries.push(new vscode.Range(line, 0, line, 0));
-          } else if (v === 'suspected' && showSuspected) {
-            suspected.push(new vscode.Range(line, 0, line, 0));
-          }
-          collect(s.members); // unclassified members have no verdict yet
-        }
-      };
-      collect(scan.symbols);
-      editor.setDecorations(this.entryDeco, entries);
-      editor.setDecorations(this.suspectedDeco, suspected);
-    }
-  }
-
   dispose(): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
+    if (this.rescanTimer) {
+      clearTimeout(this.rescanTimer);
     }
     if (this.fireTimer) {
       clearTimeout(this.fireTimer);
     }
-    this.entryDeco.dispose();
-    this.suspectedDeco.dispose();
     for (const d of this.subscriptions) {
       d.dispose();
     }
@@ -663,10 +461,24 @@ export class EntriesViewFeature
 
 export function registerEntryCommands(
   context: vscode.ExtensionContext,
-  feature: EntriesViewFeature,
+  feature: EntriesFeature,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('sightread.refreshEntries', () => feature.refresh()),
     vscode.commands.registerCommand('sightread.goToEntry', () => feature.quickPick()),
+    // the lens's click action: peek the references that made it an entry
+    vscode.commands.registerCommand(
+      'sightread.peekEntryReferences',
+      async (uriString: string, line: number, character: number) => {
+        const uri = vscode.Uri.parse(uriString);
+        const pos = new vscode.Position(line, character);
+        const locs =
+          (await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeReferenceProvider',
+            uri,
+            pos,
+          )) ?? [];
+        await vscode.commands.executeCommand('editor.action.showReferences', uri, pos, locs);
+      },
+    ),
   );
 }

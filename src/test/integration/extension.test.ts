@@ -1,24 +1,45 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import type { Guide } from '../../core/guide';
+import { type Guide, type Mark, addGuide } from '../../core/marks';
 import type { Compositor, SpotlightRender } from '../../vs/compositor';
-import type { EntriesViewFeature } from '../../vs/entriesView';
-import type { GuideRepository } from '../../vs/guideFeature';
-import type { MarkerRepository } from '../../vs/highlighter';
+import type { EntriesFeature } from '../../vs/entries';
+import { type MarkRepository, migrateLegacyStorage } from '../../vs/markRepository';
 import type { MarkersViewFeature } from '../../vs/markersView';
 import type { SegmentsViewFeature } from '../../vs/segmentsView';
 import type { TrailViewFeature } from '../../vs/trailView';
 
 interface TestApi {
   _test: {
-    repo: MarkerRepository;
-    guideRepo: GuideRepository;
+    repo: MarkRepository;
     compositor: Compositor;
     markersView: MarkersViewFeature;
-    entriesView: EntriesViewFeature;
+    entries: EntriesFeature;
     segmentsView: SegmentsViewFeature;
     trailView: TrailViewFeature;
   };
+}
+
+/** Seeds one AI guide (shell + role steps) into the repo, as interpret would. */
+function seedGuide(
+  repo: MarkRepository,
+  uri: vscode.Uri,
+  guide: Guide,
+  steps: Omit<Mark, 'accent' | 'guideId' | 'order'>[],
+  roles: (string | undefined)[],
+): void {
+  repo.set(
+    uri,
+    addGuide(
+      repo.get(uri),
+      guide,
+      steps.map((s, i) => ({
+        ...s,
+        accent: { kind: 'role' as const, role: roles[i] },
+        guideId: guide.id,
+        order: i,
+      })),
+    ),
+  );
 }
 
 const EXTENSION_ID = 'WaylongLeon.sightread';
@@ -41,8 +62,12 @@ suite('SightRead integration', () => {
       'sightread.foldSkeleton',
       'sightread.unfoldSkeleton',
       'sightread.mark',
-      'sightread.markFavorite',
       'sightread.markPickColor',
+      'sightread.markYellow',
+      'sightread.markRed',
+      'sightread.markGreen',
+      'sightread.markBlue',
+      'sightread.markPurple',
       'sightread.markSegment',
       'sightread.markSegmentWithNote',
       'sightread.removeSegmentMarkers',
@@ -52,6 +77,11 @@ suite('SightRead integration', () => {
       'sightread.removeMarkersInFunction',
       'sightread.removeMarkersInFile',
       'sightread.removeAllMarkers',
+      'sightread.markersCollapseAll',
+      'sightread.markersExpandAll',
+      'sightread.trailCollapseAll',
+      'sightread.trailExpandAll',
+      'sightread.trailClear',
       'sightread.spotlightSelect',
       'sightread.spotlightOff',
       'sightread.spotlightFunction',
@@ -60,7 +90,7 @@ suite('SightRead integration', () => {
       'sightread.toggleVariableTint',
       'sightread.goToSegment',
       'sightread.goToEntry',
-      'sightread.refreshEntries',
+      'sightread.peekEntryReferences',
     ]) {
       assert.ok(commands.includes(id), `missing command ${id}`);
     }
@@ -75,22 +105,22 @@ suite('SightRead integration', () => {
     const editor = await vscode.window.showTextDocument(doc);
 
     editor.selection = new vscode.Selection(1, 0, 2, 5);
-    await vscode.commands.executeCommand('sightread.markFavorite');
-    let markers = api._test.repo.get(doc.uri);
-    assert.strictEqual(markers.length, 1);
-    assert.deepStrictEqual([markers[0].startLine, markers[0].endLine], [1, 2]);
+    await vscode.commands.executeCommand('sightread.markYellow');
+    let marks = api._test.repo.get(doc.uri).marks;
+    assert.strictEqual(marks.length, 1);
+    assert.deepStrictEqual([marks[0].startLine, marks[0].endLine], [1, 2]);
 
-    // edit above → marker shifts down
+    // edit above → mark shifts down
     await editor.edit((eb) => eb.insert(new vscode.Position(0, 0), 'inserted\n'));
     await sleep(100);
-    markers = api._test.repo.get(doc.uri);
-    assert.strictEqual(markers.length, 1);
-    assert.deepStrictEqual([markers[0].startLine, markers[0].endLine], [2, 3]);
+    marks = api._test.repo.get(doc.uri).marks;
+    assert.strictEqual(marks.length, 1);
+    assert.deepStrictEqual([marks[0].startLine, marks[0].endLine], [2, 3]);
 
-    // edit inside → marker auto-deletes
+    // edit inside → mark auto-deletes
     await editor.edit((eb) => eb.insert(new vscode.Position(2, 1), 'zz'));
     await sleep(100);
-    assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
+    assert.strictEqual(api._test.repo.get(doc.uri).marks.length, 0);
   });
 
   test('markers view lists marked locations with preview snapshots', async () => {
@@ -101,11 +131,11 @@ suite('SightRead integration', () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(0, 0, 0, 5);
-    await vscode.commands.executeCommand('sightread.markFavorite');
+    await vscode.commands.executeCommand('sightread.markYellow');
 
-    const marker = api._test.repo.get(doc.uri)[0];
-    assert.ok(marker, 'marker should exist');
-    assert.strictEqual(marker.preview, 'const answer = 42;');
+    const mark = api._test.repo.get(doc.uri).marks[0];
+    assert.ok(mark, 'mark should exist');
+    assert.strictEqual(mark.preview, 'const answer = 42;');
 
     const roots = api._test.markersView.getChildren();
     const fileNode = roots.find(
@@ -114,14 +144,14 @@ suite('SightRead integration', () => {
     assert.ok(fileNode, 'markers view should list the marked file');
     const children = api._test.markersView.getChildren(fileNode);
     assert.strictEqual(children.length, 1);
-    assert.strictEqual(children[0].kind, 'marker');
+    assert.strictEqual(children[0].kind, 'mark');
 
     const item = api._test.markersView.getTreeItem(children[0]);
     assert.strictEqual(item.label, 'const answer = 42;');
     assert.strictEqual(item.command?.command, 'sightread.revealLocation');
 
     await vscode.commands.executeCommand('sightread.removeMarker', children[0]);
-    assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
+    assert.strictEqual(api._test.repo.get(doc.uri).marks.length, 0);
   });
 
   test('markers view lists markers in line order, not creation order', async () => {
@@ -132,9 +162,9 @@ suite('SightRead integration', () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(2, 0, 2, 1);
-    await vscode.commands.executeCommand('sightread.markFavorite');
+    await vscode.commands.executeCommand('sightread.markYellow');
     editor.selection = new vscode.Selection(0, 0, 0, 1);
-    await vscode.commands.executeCommand('sightread.markFavorite');
+    await vscode.commands.executeCommand('sightread.markYellow');
 
     const view = api._test.markersView;
     const fileNode = view
@@ -143,8 +173,8 @@ suite('SightRead integration', () => {
     assert.ok(fileNode, 'markers view should list the marked file');
     const lines = view
       .getChildren(fileNode)
-      .map((n) => (n.kind === 'marker' ? n.marker.startLine : -1));
-    assert.deepStrictEqual(lines, [0, 2], 'markers should mirror the file top-down');
+      .map((n) => (n.kind === 'mark' ? n.mark.startLine : -1));
+    assert.deepStrictEqual(lines, [0, 2], 'marks should mirror the file top-down');
     await vscode.commands.executeCommand('sightread.removeMarkersInFile');
   });
 
@@ -156,10 +186,10 @@ suite('SightRead integration', () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(0, 0, 1, 1);
-    await vscode.commands.executeCommand('sightread.markFavorite');
-    assert.strictEqual(api._test.repo.get(doc.uri).length, 1);
+    await vscode.commands.executeCommand('sightread.markYellow');
+    assert.strictEqual(api._test.repo.get(doc.uri).marks.length, 1);
     await vscode.commands.executeCommand('sightread.removeMarkersInFile');
-    assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
+    assert.strictEqual(api._test.repo.get(doc.uri).marks.length, 0);
   });
 
   test('fold/unfold skeleton inside a class method never folds the class', async function () {
@@ -656,14 +686,14 @@ suite('SightRead integration', () => {
     assert.ok(segUri, 'segment item should carry a decoration URI');
     assert.strictEqual(view.provideFileDecoration(segUri), undefined, 'untinted before marking');
 
-    // a marker on one line inside the segment tints the whole item (partial overlap counts)
+    // a mark on one line inside the segment tints the whole item (partial overlap counts)
     editor.selection = new vscode.Selection(2, 0, 2, 6);
-    await vscode.commands.executeCommand('sightread.markFavorite');
+    await vscode.commands.executeCommand('sightread.markYellow');
     const deco = view.provideFileDecoration(segUri);
     assert.ok(deco?.color, 'marked segment label should carry the marker color');
 
     await vscode.commands.executeCommand('sightread.removeSegmentMarkers', ifSeg);
-    assert.strictEqual(api._test.repo.get(doc.uri).length, 0);
+    assert.strictEqual(api._test.repo.get(doc.uri).marks.length, 0);
     assert.strictEqual(
       view.provideFileDecoration(segUri),
       undefined,
@@ -708,49 +738,44 @@ suite('SightRead integration', () => {
     assert.ok(segUri, 'segment item should carry a decoration URI');
     assert.strictEqual(view.provideFileDecoration(segUri), undefined, 'untinted before the guide');
 
-    // an AI guide step on one line inside the segment tints it, like a manual marker
-    api._test.guideRepo.set(doc.uri, [
-      {
-        id: 'guide-tint',
-        subject: 'guided',
-        unit: 'function',
-        startLine: 0,
-        endLine: 6,
-        steps: [{ id: 'step-tint', note: 'the branch', role: 'main', startLine: 2, endLine: 2 }],
-      },
-    ]);
+    // an AI guide step on one line inside the segment tints it, like a manual mark
+    seedGuide(
+      api._test.repo,
+      doc.uri,
+      { id: 'guide-tint', subject: 'guided', unit: 'function' },
+      [{ id: 'step-tint', note: 'the branch', startLine: 2, endLine: 2 }],
+      ['main'],
+    );
     const deco = view.provideFileDecoration(segUri);
     assert.ok(deco?.color, 'guide-covered segment label should carry the role color');
 
     // hiding the step's role removes the tint (the filter applies everywhere)
-    api._test.compositor.setHiddenGuideRoles(new Set(['main']));
+    api._test.compositor.setHiddenAccents(new Set(['role:main']));
     assert.strictEqual(
       view.provideFileDecoration(segUri),
       undefined,
       'tint should disappear with the hidden role',
     );
-    api._test.compositor.setHiddenGuideRoles(new Set());
-    api._test.guideRepo.set(doc.uri, []);
+    api._test.compositor.setHiddenAccents(new Set());
+    await vscode.commands.executeCommand('sightread.removeMarkersInFile');
   });
 
-  test('role filter hides filtered steps in the markers view, keeping original numbering', async () => {
+  test('accent filter hides filtered steps in the markers view, keeping original numbering', async () => {
     const api = await getApi();
     const doc = await vscode.workspace.openTextDocument({
       content: 'alpha\nbeta\ngamma\n',
       language: 'plaintext',
     });
-    const guide: Guide = {
-      id: 'guide-filter',
-      subject: 'demo',
-      unit: 'file',
-      startLine: 0,
-      endLine: 2,
-      steps: [
-        { id: 'step-1', note: 'first', role: 'main', startLine: 0, endLine: 0 },
-        { id: 'step-2', note: 'second', role: 'util', startLine: 1, endLine: 1 },
+    seedGuide(
+      api._test.repo,
+      doc.uri,
+      { id: 'guide-filter', subject: 'demo', unit: 'file' },
+      [
+        { id: 'step-1', note: 'first', startLine: 0, endLine: 0 },
+        { id: 'step-2', note: 'second', startLine: 1, endLine: 1 },
       ],
-    };
-    api._test.guideRepo.set(doc.uri, [guide]);
+      ['main', 'util'],
+    );
     const view = api._test.markersView;
     const fileNode = view
       .getChildren()
@@ -760,21 +785,105 @@ suite('SightRead integration', () => {
     assert.ok(guideNode, 'the guide should sit under its file');
     assert.strictEqual(view.getChildren(guideNode).length, 2);
 
-    api._test.compositor.setHiddenGuideRoles(new Set(['main']));
+    api._test.compositor.setHiddenAccents(new Set(['role:main']));
     const steps = view.getChildren(guideNode);
     assert.strictEqual(steps.length, 1, 'the hidden role step should disappear from the view');
     const only = steps[0];
-    assert.ok(only.kind === 'step', 'remaining node is a step');
-    assert.strictEqual(only.step.id, 'step-2');
-    assert.strictEqual(only.index, 1, 'keeps the original reading-order position');
+    assert.ok(only.kind === 'mark', 'remaining node is a mark');
+    assert.strictEqual(only.mark.id, 'step-2');
+    assert.strictEqual(only.mark.order, 1, 'keeps the original reading-order position');
     assert.ok(
       String(view.getTreeItem(only).label).startsWith('2.'),
       'numbering matches the editor step badges',
     );
 
-    api._test.compositor.setHiddenGuideRoles(new Set());
+    api._test.compositor.setHiddenAccents(new Set());
     assert.strictEqual(view.getChildren(guideNode).length, 2, 'clearing the filter restores steps');
-    api._test.guideRepo.set(doc.uri, []);
+    api._test.repo.set(doc.uri, { marks: [], guides: [] });
+  });
+
+  test('markers: message counts hidden marks; clearing marks restores the welcome', async () => {
+    const api = await getApi();
+    const view = api._test.markersView;
+    api._test.repo.clearAll();
+    const doc = await vscode.workspace.openTextDocument({
+      content: 'one\ntwo\n',
+      language: 'plaintext',
+    });
+    api._test.repo.set(doc.uri, {
+      marks: [
+        { id: 'm-y', accent: { kind: 'color', color: 'yellow' }, startLine: 0, endLine: 0 },
+        { id: 'm-b', accent: { kind: 'color', color: 'blue' }, startLine: 1, endLine: 1 },
+      ],
+      guides: [],
+    });
+    api._test.compositor.setHiddenAccents(new Set(['color:yellow']));
+    assert.strictEqual(view.viewMessage, '⊘ 1 hidden', 'counts marks, not hidden accent keys');
+    api._test.compositor.setHiddenAccents(new Set(['color:yellow', 'color:blue']));
+    assert.strictEqual(view.viewMessage, '⊘ 2 hidden');
+    assert.strictEqual(
+      view
+        .getChildren()
+        .filter((n) => n.kind === 'file' && n.uri.toString() === doc.uri.toString()).length,
+      0,
+      'a file whose every mark is hidden drops from the list',
+    );
+    // clearing the marks must clear the message too — a lingering message
+    // suppresses the viewsWelcome empty state (the welcome-never-returns bug)
+    api._test.repo.set(doc.uri, { marks: [], guides: [] });
+    assert.strictEqual(view.viewMessage, undefined, 'no marks hidden — no message');
+    api._test.compositor.setHiddenAccents(new Set());
+  });
+
+  test('legacy markers+guides storage migrates into the unified key', () => {
+    const store = new Map<string, unknown>();
+    const memento = {
+      get: <T>(key: string, dflt?: T): T | undefined => (store.get(key) as T) ?? dflt,
+      update: (key: string, value: unknown): Thenable<void> => {
+        if (value === undefined) {
+          store.delete(key);
+        } else {
+          store.set(key, value);
+        }
+        return Promise.resolve();
+      },
+    } as vscode.Memento;
+    store.set('sightread.markers', {
+      'file:///a.ts': [
+        { id: 'm1', color: 'red', note: 'why', startLine: 3, endLine: 4 },
+      ],
+    });
+    store.set('sightread.guides', {
+      'file:///a.ts': [
+        {
+          id: 'g1',
+          subject: 'fn',
+          unit: 'function',
+          summary: 'sum',
+          startLine: 0,
+          endLine: 9,
+          steps: [{ id: 's1', note: 'n', role: 'main', startLine: 1, endLine: 2 }],
+        },
+      ],
+    });
+    migrateLegacyStorage(memento);
+    assert.strictEqual(store.has('sightread.markers'), false);
+    assert.strictEqual(store.has('sightread.guides'), false);
+    const merged = store.get('sightread.marks') as Record<
+      string,
+      { marks: Mark[]; guides: Guide[] }
+    >;
+    const state = merged['file:///a.ts'];
+    assert.strictEqual(state.guides.length, 1);
+    assert.strictEqual(state.guides[0].summary, 'sum');
+    assert.deepStrictEqual(
+      state.marks.map((m) => [m.id, m.accent.kind, m.guideId ?? null]),
+      [
+        ['s1', 'role', 'g1'],
+        ['m1', 'color', null],
+      ],
+      'marks sort by line: the step at L1 precedes the manual mark at L3',
+    );
   });
 
   test('entry points: exported → entry, wrapped → hidden, orphan/top-level-called → suspected', async function () {
@@ -806,14 +915,14 @@ suite('SightRead integration', () => {
       language: 'javascript',
     });
     await vscode.window.showTextDocument(doc);
-    const view = api._test.entriesView;
+    const feature = api._test.entries;
 
     // the JS language service needs to warm up before references resolve — poll
     let names: string[] = [];
     for (let i = 0; i < 100; i++) {
-      const scan = view.ensureScan(doc, true);
+      const scan = feature.ensureScan(doc, true);
       await scan.done;
-      names = (await view.getChildren()).map((s) => s.name);
+      names = feature.visibleSymbols(scan.symbols).map((s) => s.name);
       if (names.join(',') === 'publicApi,orphan,bootstrap') {
         break;
       }
@@ -825,14 +934,16 @@ suite('SightRead integration', () => {
       'entries sorted first, wrapped symbols hidden, top-level-called symbols kept',
     );
 
-    const visible = await view.getChildren();
-    assert.strictEqual(view.getTreeItem(visible[0]).description, 'exported');
-    assert.strictEqual(view.getTreeItem(visible[1]).description, 'no refs found');
-    assert.strictEqual(view.getTreeItem(visible[2]).description, 'called at top level');
-    assert.strictEqual(
-      view.getTreeItem(visible[0]).command?.command,
-      'sightread.revealLocation',
+    const lenses = feature.provideCodeLenses(doc);
+    assert.deepStrictEqual(
+      lenses.map((l) => l.command?.title),
+      [
+        '» entry — exported',
+        '» suspected entry — no refs found',
+        '» suspected entry — called at top level',
+      ],
     );
+    assert.strictEqual(lenses[0].command?.command, 'sightread.peekEntryReferences');
   });
 
   test('trail: a real go-to-definition jump records caller → callee', async function () {
@@ -873,6 +984,119 @@ suite('SightRead integration', () => {
     }
     assert.ok(edge(), 'expected a caller → callee edge after go-to-definition');
     assert.strictEqual(edge()!.callsiteLine, 5);
+    trail.clear();
+  });
+
+  test('trail: cursor arriving inside a walked node selects it in the view', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const trail = api._test.trailView;
+    await vscode.commands.executeCommand('sightread.trailView.focus');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function callee() {',
+        '  return 1;',
+        '}',
+        '',
+        'function caller() {',
+        '  const x = callee();',
+        '  return x + 1;',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    trail.clear();
+    const uri = doc.uri.toString();
+    // seed a walked edge directly — under test is the reveal, not the recording
+    trail.graph.recordEdge(
+      { key: `${uri}##caller`, name: 'caller', kind: 'function', uriString: uri, line: 4, endLine: 7 },
+      { key: `${uri}##callee`, name: 'callee', kind: 'function', uriString: uri, line: 0, endLine: 2 },
+      5,
+    );
+    // render the seeded nodes (recordEdge alone does not fire the tree)
+    trail.setFolded(true);
+    trail.setFolded(false);
+    await sleep(300);
+    let selectedKey: string | undefined;
+    for (let i = 0; i < 15 && selectedKey !== `${uri}##callee`; i++) {
+      editor.selection = new vscode.Selection(3, 0, 3, 0); // between the functions
+      await sleep(250);
+      editor.selection = new vscode.Selection(1, 4, 1, 4); // inside callee's body
+      await sleep(450);
+      selectedKey = trail.treeSelection[0]?.key;
+    }
+    assert.strictEqual(
+      selectedKey,
+      `${uri}##callee`,
+      'the view should follow the cursor into a trail node',
+    );
+    trail.clear();
+  });
+
+  test('trail: cursor arriving inside a planned node converts and selects it', async function () {
+    this.timeout(30000);
+    const api = await getApi();
+    const trail = api._test.trailView;
+    await vscode.commands.executeCommand('sightread.trailView.focus');
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'javascript',
+      content: [
+        'function planned() {',
+        '  return 1;',
+        '}',
+        '',
+        'function entry() {',
+        '  return planned();',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    trail.clear();
+    const uri = doc.uri.toString();
+    await trail.applyRoute(
+      [
+        {
+          node: {
+            key: `${uri}##entry`,
+            name: 'entry',
+            kind: 'function',
+            uriString: uri,
+            line: 4,
+            endLine: 6,
+          },
+        },
+        {
+          node: {
+            key: `${uri}##planned`,
+            name: 'planned',
+            kind: 'function',
+            uriString: uri,
+            line: 0,
+            endLine: 2,
+          },
+          calledFrom: 0,
+          callsiteLine: 5,
+        },
+      ],
+      'test route',
+    );
+    let selectedKey: string | undefined;
+    for (let i = 0; i < 15 && selectedKey !== `${uri}##planned`; i++) {
+      editor.selection = new vscode.Selection(3, 0, 3, 0);
+      await sleep(250);
+      editor.selection = new vscode.Selection(1, 4, 1, 4); // inside planned()
+      await sleep(450);
+      selectedKey = trail.treeSelection[0]?.key;
+    }
+    assert.strictEqual(selectedKey, `${uri}##planned`, 'arrival should select the converted node');
+    assert.strictEqual(
+      trail.graph.node(`${uri}##planned`)?.planned,
+      false,
+      'arrival converts the planned node',
+    );
     trail.clear();
   });
 
@@ -918,7 +1142,7 @@ suite('SightRead integration', () => {
     trail.clear();
   });
 
-  test('trail: ↗ badge appears at 2 discovered callers, ↻ on a recursion leaf', async function () {
+  test('trail: convergence mirrors the callee under both callers, ↻ on a recursion leaf', async function () {
     this.timeout(60000);
     const api = await getApi();
     const trail = api._test.trailView;
@@ -968,14 +1192,15 @@ suite('SightRead integration', () => {
       await sleep(500);
     }
     assert.strictEqual(callers(), 2, 'expected shared to have 2 discovered callers');
-    const alphaRoot = trail.graph.roots().find((r) => r.name === 'alpha');
-    assert.ok(alphaRoot, 'alpha should be a root');
-    const mirror = trail
-      .getChildren({ key: alphaRoot!.key, path: [], recursive: false })
-      .find((c) => c.key === sharedNode()!.key);
-    assert.ok(mirror, 'shared should appear under alpha');
-    const badge = String(trail.getTreeItem(mirror!).description);
-    assert.ok(badge.includes('↗ 2 callers'), `description was: "${badge}"`);
+    // the convergence shows as topology: shared mirrors under each caller
+    for (const rootName of ['alpha', 'beta']) {
+      const root = trail.graph.roots().find((r) => r.name === rootName);
+      assert.ok(root, `${rootName} should be a root`);
+      const mirror = trail
+        .getChildren({ key: root!.key, path: [], recursive: false })
+        .find((c) => c.key === sharedNode()!.key);
+      assert.ok(mirror, `shared should appear under ${rootName}`);
+    }
 
     // --- recursion: from the self-call site onto the function's own name ---
     const rdoc = await vscode.workspace.openTextDocument({

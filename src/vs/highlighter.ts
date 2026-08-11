@@ -2,54 +2,40 @@ import * as vscode from 'vscode';
 import {
   EditChange,
   MARKER_COLORS,
-  Marker,
+  Mark,
   MarkerColor,
-  applyChanges,
-  insertMarker,
-  markersAtLine,
-  removeInLineRange,
-} from '../core/markers';
-import { Guide } from '../core/guide';
+  applyChangesToFile,
+  colorAccent,
+  emptyFileMarks,
+  insertMark,
+  marksAtLine,
+  removeMarksInRange,
+} from '../core/marks';
 import { Compositor } from './compositor';
-import { ItemRepository, newId } from './itemRepository';
+import { MarkRepository, newId } from './markRepository';
+import { PALETTE, swatchIcon } from './palette';
 import { findFunctionAtCursor } from './symbols';
 
-const COLOR_LABELS: Record<MarkerColor, string> = {
-  yellow: '🟡 Yellow',
-  red: '🔴 Red',
-  green: '🟢 Green',
-  blue: '🔵 Blue',
-  purple: '🟣 Purple',
-};
-
-export function favoriteColor(): MarkerColor {
-  const c = vscode.workspace
-    .getConfiguration('sightread')
-    .get<string>('marker.favoriteColor', 'yellow');
-  return (MARKER_COLORS as string[]).includes(c) ? (c as MarkerColor) : 'yellow';
+function capitalize(color: MarkerColor): string {
+  return color[0].toUpperCase() + color.slice(1);
 }
 
 export async function pickMarkerColor(): Promise<MarkerColor | undefined> {
   const picked = await vscode.window.showQuickPick(
-    MARKER_COLORS.map((c) => ({ label: COLOR_LABELS[c], color: c })),
-    { placeHolder: 'Marker color' },
+    MARKER_COLORS.map((c) => ({
+      label: capitalize(c),
+      iconPath: swatchIcon(PALETTE[c]),
+      color: c,
+    })),
+    { title: 'Marker Color' },
   );
   return picked?.color;
 }
 
 /** Esc on the note prompt resolves to no note — the note is optional. */
 export async function promptMarkerNote(): Promise<string | undefined> {
-  const note = await vscode.window.showInputBox({
-    prompt: 'Note (optional, shown at the end of the first marked line)',
-    placeHolder: 'leave empty for no note',
-  });
+  const note = await vscode.window.showInputBox({ prompt: 'Marker note' });
   return note || undefined;
-}
-
-export class MarkerRepository extends ItemRepository<Marker> {
-  constructor(memento: vscode.Memento) {
-    super(memento, 'sightread.markers');
-  }
 }
 
 /** Trimmed, truncated first-line snapshot shown in list views. */
@@ -68,9 +54,9 @@ function selectionLineRange(editor: vscode.TextEditor): { start: number; end: nu
   return { start: sel.start.line, end };
 }
 
-/** Creates a marker over a line range of `doc` (shared by selection and segment marking). */
+/** Creates a mark over a line range of `doc` (shared by selection and segment marking). */
 export function addLineMarker(
-  repo: MarkerRepository,
+  repo: MarkRepository,
   compositor: Compositor,
   doc: vscode.TextDocument,
   startLine: number,
@@ -80,16 +66,21 @@ export function addLineMarker(
 ): void {
   const start = Math.min(startLine, doc.lineCount - 1);
   const end = Math.min(endLine, doc.lineCount - 1);
-  const preview = linePreview(doc, start);
-  const marker: Marker = { id: newId(), color, note, preview, startLine: start, endLine: end };
-  const { markers } = insertMarker(repo.get(doc.uri), marker);
-  repo.set(doc.uri, markers);
+  const mark: Mark = {
+    id: newId(),
+    accent: colorAccent(color),
+    note,
+    preview: linePreview(doc, start),
+    startLine: start,
+    endLine: end,
+  };
+  repo.set(doc.uri, insertMark(repo.get(doc.uri), mark));
   compositor.renderVisibleFor(doc.uri);
 }
 
 function addMarker(
   editor: vscode.TextEditor,
-  repo: MarkerRepository,
+  repo: MarkRepository,
   compositor: Compositor,
   color: MarkerColor,
   note: string | undefined,
@@ -100,8 +91,7 @@ function addMarker(
 
 export function registerHighlighterCommands(
   context: vscode.ExtensionContext,
-  repo: MarkerRepository,
-  guideRepo: ItemRepository<Guide>,
+  repo: MarkRepository,
   compositor: Compositor,
 ): void {
   const withEditor = (fn: (editor: vscode.TextEditor) => void | Promise<void>) => (): void => {
@@ -110,6 +100,16 @@ export function registerHighlighterCommands(
       void fn(editor);
     }
   };
+
+  // one direct command per palette color, for user-bound shortcuts
+  for (const color of MARKER_COLORS) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        `sightread.mark${capitalize(color)}`,
+        withEditor((editor) => addMarker(editor, repo, compositor, color, undefined)),
+      ),
+    );
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -121,10 +121,6 @@ export function registerHighlighterCommands(
         }
         addMarker(editor, repo, compositor, color, await promptMarkerNote());
       }),
-    ),
-    vscode.commands.registerCommand(
-      'sightread.markFavorite',
-      withEditor((editor) => addMarker(editor, repo, compositor, favoriteColor(), undefined)),
     ),
     vscode.commands.registerCommand(
       'sightread.markPickColor',
@@ -139,23 +135,25 @@ export function registerHighlighterCommands(
       'sightread.editMarkerNote',
       withEditor(async (editor) => {
         const uri = editor.document.uri;
-        const markers = repo.get(uri);
-        const hit = markersAtLine(markers, editor.selection.active.line)[0];
+        const state = repo.get(uri);
+        const hit = marksAtLine(state.marks, editor.selection.active.line)[0];
         if (!hit) {
-          void vscode.window.showInformationMessage('SightRead: no marker at cursor.');
+          void vscode.window.showInformationMessage('SightRead: no mark at cursor.');
           return;
         }
         const note = await vscode.window.showInputBox({
-          prompt: 'Marker note (empty to remove the note)',
+          prompt: 'Marker note',
           value: hit.note ?? '',
         });
         if (note === undefined) {
           return; // cancelled
         }
-        repo.set(
-          uri,
-          markers.map((m) => (m.id === hit.id ? { ...m, note: note || undefined } : m)),
-        );
+        repo.set(uri, {
+          ...state,
+          marks: state.marks.map((m) =>
+            m.id === hit.id ? { ...m, note: note || undefined } : m,
+          ),
+        });
         compositor.renderVisibleFor(uri);
       }),
     ),
@@ -163,8 +161,7 @@ export function registerHighlighterCommands(
       'sightread.removeMarkersInSelection',
       withEditor((editor) => {
         const { start, end } = selectionLineRange(editor);
-        const { markers } = removeInLineRange(repo.get(editor.document.uri), start, end);
-        repo.set(editor.document.uri, markers);
+        repo.set(editor.document.uri, removeMarksInRange(repo.get(editor.document.uri), start, end));
         compositor.renderVisibleFor(editor.document.uri);
       }),
     ),
@@ -176,31 +173,32 @@ export function registerHighlighterCommands(
           void vscode.window.showInformationMessage('SightRead: cursor is not inside a function.');
           return;
         }
-        const { markers } = removeInLineRange(
-          repo.get(editor.document.uri),
-          fn.range.start.line,
-          fn.range.end.line,
+        repo.set(
+          editor.document.uri,
+          removeMarksInRange(
+            repo.get(editor.document.uri),
+            fn.range.start.line,
+            fn.range.end.line,
+          ),
         );
-        repo.set(editor.document.uri, markers);
         compositor.renderVisibleFor(editor.document.uri);
       }),
     ),
     vscode.commands.registerCommand(
       'sightread.removeMarkersInFile',
       withEditor((editor) => {
-        repo.set(editor.document.uri, []);
+        repo.set(editor.document.uri, emptyFileMarks());
         compositor.renderVisibleFor(editor.document.uri);
       }),
     ),
     vscode.commands.registerCommand('sightread.removeAllMarkers', async () => {
       const confirmed = await vscode.window.showWarningMessage(
-        'Remove all SightRead markers and AI guides in this workspace?',
+        'Clear all SightRead marks and AI guides in this workspace?',
         { modal: true },
-        'Remove All',
+        'Clear All',
       );
-      if (confirmed === 'Remove All') {
+      if (confirmed === 'Clear All') {
         repo.clearAll();
-        guideRepo.clearAll();
         compositor.renderVisible();
       }
     }),
@@ -208,19 +206,20 @@ export function registerHighlighterCommands(
 }
 
 /**
- * Keeps markers in sync with edits: shift on edits elsewhere, delete on any
- * edit that touches marked lines (design.md §3.2).
+ * Keeps marks in sync with edits: shift on edits elsewhere, delete on any
+ * edit that touches marked lines (design.md §3.2, per mark — guide shells
+ * die with their last mark).
  */
 export function handleDocumentChange(
   e: vscode.TextDocumentChangeEvent,
-  repo: MarkerRepository,
+  repo: MarkRepository,
   compositor: Compositor,
 ): void {
   if (e.contentChanges.length === 0) {
     return;
   }
   const before = repo.get(e.document.uri);
-  if (before.length === 0) {
+  if (before.marks.length === 0) {
     return;
   }
   const changes: EditChange[] = e.contentChanges.map((ch) => ({
@@ -230,9 +229,9 @@ export function handleDocumentChange(
     endChar: ch.range.end.character,
     insertedNewlines: (ch.text.match(/\n/g) ?? []).length,
   }));
-  const result = applyChanges(before, changes);
+  const result = applyChangesToFile(before, changes);
   if (result.changed) {
-    repo.set(e.document.uri, result.items);
+    repo.set(e.document.uri, result.state);
     compositor.renderVisibleFor(e.document.uri);
   }
 }

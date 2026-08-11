@@ -3,19 +3,23 @@ import * as vscode from 'vscode';
 import {
   Guide,
   InterpretUnit,
-  applyChangesToGuides,
-  roleKey,
-} from '../core/guide';
+  MARKER_COLORS,
+  Mark,
+  MarkerColor,
+  accentFromKey,
+  accentKey,
+  addGuide,
+  roleAccent,
+} from '../core/marks';
 import { parseGuideResponse } from '../core/guideParse';
 import { SubjectContext, buildGuidePrompt } from '../core/guidePrompt';
 import { BUILTIN_HARNESSES, HarnessProfile, resolveHarness } from '../core/harness';
-import { EditChange } from '../core/markers';
 import { recordDuration, typicalMs } from '../core/runStats';
 import { autoDetectionOrder, pickHarness } from './agentCli';
 import { Compositor } from './compositor';
 import { linePreview } from './highlighter';
-import { ItemRepository, newId } from './itemRepository';
-import { circleIcon, guideRoleRank, guideRoleRgb } from './palette';
+import { MarkRepository, newId } from './markRepository';
+import { accentPaint, guideRoleRank, swatchIcon } from './palette';
 import type { GuideNode } from './markersView';
 import { InterpretTarget, resolveInterpretTarget } from './symbols';
 
@@ -26,20 +30,6 @@ export const DURATIONS_KEY = 'sightread.guide.runDurations';
 /** argv-size / token-cost guards for the one-shot prompt */
 const MAX_UNIT_LINES: Record<InterpretUnit, number> = { function: 1200, class: 1200, file: 2000 };
 const MAX_HEADER_LINES = 40;
-
-function isStoredGuide(g: Guide): boolean {
-  return (
-    typeof g.subject === 'string' &&
-    (g.unit === 'function' || g.unit === 'class' || g.unit === 'file') &&
-    Array.isArray(g.steps)
-  );
-}
-
-export class GuideRepository extends ItemRepository<Guide> {
-  constructor(memento: vscode.Memento) {
-    super(memento, 'sightread.guides', isStoredGuide);
-  }
-}
 
 /** The one-shot request's raw material, gathered without any agent help. */
 export async function collectSubjectContext(
@@ -91,62 +81,39 @@ export async function showHarnessNotFound(cfg: vscode.WorkspaceConfiguration): P
   }
 }
 
-/** Mirrors highlighter.handleDocumentChange for the guide layer. */
-export function handleGuideDocumentChange(
-  e: vscode.TextDocumentChangeEvent,
-  repo: GuideRepository,
-  compositor: Compositor,
-): void {
-  if (e.contentChanges.length === 0) {
-    return;
-  }
-  const before = repo.get(e.document.uri);
-  if (before.length === 0) {
-    return;
-  }
-  const changes: EditChange[] = e.contentChanges.map((ch) => ({
-    startLine: ch.range.start.line,
-    startChar: ch.range.start.character,
-    endLine: ch.range.end.line,
-    endChar: ch.range.end.character,
-    insertedNewlines: (ch.text.match(/\n/g) ?? []).length,
-  }));
-  const result = applyChangesToGuides(before, changes);
-  if (result.changed) {
-    repo.set(e.document.uri, result.guides);
-    compositor.renderVisibleFor(e.document.uri);
-  }
-}
-
 /**
  * The AI reading-guide feature: interprets the current function through a
- * headless coding-agent CLI and renders the returned steps in place.
+ * headless coding-agent CLI and renders the returned steps in place, as
+ * role-accent marks owned by a guide shell.
  */
 export class GuideFeature implements vscode.Disposable {
   private subscriptions: vscode.Disposable[] = [];
 
   constructor(
-    private repo: GuideRepository,
+    private repo: MarkRepository,
     private compositor: Compositor,
     /** globalState — typical durations belong to the machine's harness, not the workspace */
     private stats: vscode.Memento,
+    /** shared "SightRead" channel — every AI run leaves its raw response here */
+    private channel: vscode.OutputChannel,
   ) {
     this.subscriptions.push(
       vscode.commands.registerCommand('sightread.interpretFunction', () =>
         this.interpretFunction(),
       ),
-      vscode.commands.registerCommand('sightread.guideFilterRoles', () => this.filterRoles()),
+      vscode.commands.registerCommand('sightread.guideFilterRoles', () => this.filterMarks()),
       vscode.commands.registerCommand('sightread.guideFilterRolesActive', () =>
-        this.filterRoles(),
+        this.filterMarks(),
       ),
       vscode.commands.registerCommand('sightread.removeGuide', (node: GuideNode) => {
         if (node?.kind !== 'guide') {
           return;
         }
-        this.repo.set(
-          node.uri,
-          this.repo.get(node.uri).filter((g) => g.id !== node.guide.id),
-        );
+        const state = this.repo.get(node.uri);
+        this.repo.set(node.uri, {
+          marks: state.marks.filter((m) => m.guideId !== node.guide.id),
+          guides: state.guides.filter((g) => g.id !== node.guide.id),
+        });
         this.compositor.renderVisibleFor(node.uri);
       }),
     );
@@ -223,6 +190,9 @@ export class GuideFeature implements vscode.Disposable {
       );
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      this.channel.appendLine(
+        `\n[${new Date().toISOString()}] ${target.unit} ${target.name} via ${runner.name}: run failed — ${message}`,
+      );
       if (message !== 'cancelled') {
         void vscode.window.showErrorMessage(`SightRead: ${message}`);
       }
@@ -232,6 +202,13 @@ export class GuideFeature implements vscode.Disposable {
       ...durations,
       [statsKey]: recordDuration(durations[statsKey] ?? [], Date.now() - startMs),
     });
+
+    this.channel.appendLine(
+      `\n[${new Date().toISOString()}] ${target.unit} ${target.name} via ${runner.name}`,
+    );
+    this.channel.appendLine('--- raw response ---');
+    this.channel.appendLine(raw.trim());
+    this.channel.appendLine('--- end raw response ---');
 
     const parsed = parseGuideResponse(
       {
@@ -244,68 +221,88 @@ export class GuideFeature implements vscode.Disposable {
       newId,
     );
     if (!parsed.ok) {
+      this.channel.appendLine(`parse: ${parsed.error}`);
       void vscode.window.showErrorMessage(`SightRead: ${parsed.error}`);
       return;
     }
-    const guide: Guide = {
-      ...parsed.guide,
-      steps: parsed.guide.steps.map((s) => ({ ...s, preview: linePreview(doc, s.startLine) })),
+    this.channel.appendLine(`parse: ${parsed.guide.steps.length} steps`);
+    const shell: Guide = {
+      id: parsed.guide.id,
+      subject: parsed.guide.subject,
+      unit: parsed.guide.unit,
+      summary: parsed.guide.summary,
     };
+    const steps: Mark[] = parsed.guide.steps.map((s, order) => ({
+      id: s.id,
+      accent: roleAccent(s.role),
+      note: s.note,
+      preview: linePreview(doc, s.startLine),
+      guideId: shell.id,
+      order,
+      startLine: s.startLine,
+      endLine: s.endLine,
+    }));
     // a new interpretation supersedes whatever it overlaps (a function guide
-    // replaces the file overview covering it — confirmed design)
-    const kept = this.repo
-      .get(doc.uri)
-      .filter((g) => g.endLine < guide.startLine || g.startLine > guide.endLine);
-    this.repo.set(doc.uri, [...kept, guide]);
+    // replaces the file overview covering it — handled inside addGuide)
+    this.repo.set(doc.uri, addGuide(this.repo.get(doc.uri), shell, steps));
     this.compositor.renderVisibleFor(doc.uri);
     void vscode.commands.executeCommand(
       'sightread.revealLocation',
       doc.uri.toString(),
-      guide.steps[0].startLine,
+      steps[0].startLine,
     );
   }
 
   /**
-   * Multi-select over the role keys present in the active file's guides plus
-   * whatever is currently hidden (so a hidden role can always be brought
-   * back). Checked = visible; confirming hides the unchecked. Session-wide
-   * state, owned by the compositor; hiding applies everywhere — editor
-   * decorations, the Markers view, and the Segments-view tint.
+   * Multi-select over the accent keys present in the active file's marks —
+   * manual colors and AI roles alike — plus whatever is currently hidden (so
+   * a hidden accent can always be brought back). Checked = visible;
+   * confirming hides the unchecked. Session-wide state, owned by the
+   * compositor; hiding applies everywhere — editor decorations and every
+   * sidebar view.
    */
-  private async filterRoles(): Promise<void> {
+  private async filterMarks(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
-    const hidden = this.compositor.getHiddenGuideRoles();
+    const hidden = this.compositor.getHiddenAccents();
     const counts = new Map<string, number>();
     if (editor) {
-      for (const g of this.repo.get(editor.document.uri)) {
-        for (const s of g.steps) {
-          const key = roleKey(s.role);
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
+      for (const m of this.repo.get(editor.document.uri).marks) {
+        const key = accentKey(m.accent);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
+    // colors first in palette order, then roles in semantic-group order
+    const rank = (key: string): number =>
+      key.startsWith('color:')
+        ? MARKER_COLORS.indexOf(key.slice('color:'.length) as MarkerColor)
+        : MARKER_COLORS.length + guideRoleRank(key.slice('role:'.length));
     const keys = [...new Set([...counts.keys(), ...hidden])].sort(
-      (a, b) => guideRoleRank(a) - guideRoleRank(b) || a.localeCompare(b),
+      (a, b) => rank(a) - rank(b) || a.localeCompare(b),
     );
     if (keys.length === 0) {
-      void vscode.window.showInformationMessage(
-        'SightRead: no guide steps in this file to filter.',
-      );
+      void vscode.window.showInformationMessage('SightRead: no marks in this file to filter.');
       return;
     }
+    const label = (key: string): string => {
+      if (key.startsWith('color:')) {
+        const color = key.slice('color:'.length);
+        return color[0].toUpperCase() + color.slice(1);
+      }
+      return key.slice('role:'.length) || '(untagged)';
+    };
     const items = keys.map((key) => {
       const n = counts.get(key) ?? 0;
       return {
         key,
-        label: key || '(untagged)',
-        description: n === 1 ? '1 step' : `${n} steps`,
-        iconPath: circleIcon(guideRoleRgb(key)),
+        label: label(key),
+        description: n === 1 ? '1 mark' : `${n} marks`,
+        iconPath: swatchIcon(accentPaint(accentFromKey(key))),
         picked: !hidden.has(key),
       };
     });
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'Guide Steps: Visible Roles',
-      placeHolder: 'Unchecked roles are hidden everywhere — editor, Markers and Segments views',
+      title: 'Marks: Visible Colors & Roles',
+      placeHolder: 'Unchecked marks are hidden everywhere — editor and views',
       canPickMany: true,
     });
     if (!picked) {
@@ -313,7 +310,7 @@ export class GuideFeature implements vscode.Disposable {
     }
     const visible = new Set(picked.map((i) => i.key));
     const nextHidden = new Set(keys.filter((k) => !visible.has(k)));
-    this.compositor.setHiddenGuideRoles(nextHidden);
+    this.compositor.setHiddenAccents(nextHidden);
     void vscode.commands.executeCommand(
       'setContext',
       'sightread.guideFilterActive',

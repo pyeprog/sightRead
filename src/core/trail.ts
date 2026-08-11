@@ -338,28 +338,6 @@ export class TrailGraph {
     return route;
   }
 
-  /** Removes ALL still-planned nodes/edges, every route's badges and registry. */
-  clearPlanned(): void {
-    for (const [key, node] of this.nodes) {
-      if (node.planned) {
-        this.nodes.delete(key);
-        this.outEdges.delete(key);
-      } else {
-        node.routeId = undefined;
-        node.routeCore = undefined;
-        node.routeNote = undefined;
-      }
-    }
-    for (const edges of this.outEdges.values()) {
-      for (const [calleeKey, edge] of edges) {
-        if (edge.planned || !this.nodes.has(calleeKey)) {
-          edges.delete(calleeKey);
-        }
-      }
-    }
-    this.routes.clear();
-  }
-
   /** The route a node belongs to — the view's header message source. */
   routeOf(key: string): RouteInfo | undefined {
     const id = this.nodes.get(key)?.routeId;

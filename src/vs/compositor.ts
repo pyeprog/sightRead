@@ -1,8 +1,20 @@
 import * as vscode from 'vscode';
 import { LineRange, intersectsAny, subtractRanges } from '../core/focus';
-import { Guide, stepVisible } from '../core/guide';
-import { MARKER_COLORS, Marker, MarkerColor } from '../core/markers';
-import { GUIDE_RGB, GUIDE_ROLE_RGBS, PALETTE, guideRoleRgb, gutterIcon } from './palette';
+import {
+  FileMarks,
+  MARKER_COLORS,
+  Mark,
+  guideEnvelope,
+  markVisible,
+} from '../core/marks';
+import {
+  AccentPaint,
+  GUIDE_PAINT,
+  GUIDE_ROLE_PAINTS,
+  PALETTE,
+  accentPaint,
+  gutterIcon,
+} from './palette';
 
 const STEP_BADGES = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 
@@ -29,18 +41,25 @@ interface TransientState {
   spotlight?: SpotlightRender;
 }
 
+/** every accent paint a mark can take — one decoration pair per entry,
+ *  deduplicated and keyed by the dark fragment */
+const ACCENT_PAINTS: AccentPaint[] = [
+  ...new Map(
+    [...MARKER_COLORS.map((c) => PALETTE[c]), ...GUIDE_ROLE_PAINTS].map((p) => [p.dark, p]),
+  ).values(),
+];
+
 /**
  * The single rendering coordinator (design.md §一.4): every decoration in the
  * extension flows through here. Owns all decoration types and composes the
- * persistent layer (markers + guides) with the transient state (tint +
- * spotlight), including suppressing markers inside dimmed regions.
+ * persistent layer (marks — manual and AI alike) with the transient state
+ * (tint + spotlight), including suppressing marks inside dimmed regions.
  */
 export class Compositor implements vscode.Disposable {
-  private markerFull = new Map<MarkerColor, vscode.TextEditorDecorationType>();
-  private markerDim = new Map<MarkerColor, vscode.TextEditorDecorationType>();
-  /** one pair per role accent, keyed by the "r, g, b" fragment */
-  private guideFull = new Map<string, vscode.TextEditorDecorationType>();
-  private guideDim = new Map<string, vscode.TextEditorDecorationType>();
+  /** one pair per accent paint (keyed by its dark fragment), shared by manual
+   *  colors and guide roles; each type carries light/dark variants */
+  private accentFull = new Map<string, vscode.TextEditorDecorationType>();
+  private accentDim = new Map<string, vscode.TextEditorDecorationType>();
   private noteType: vscode.TextEditorDecorationType;
   private tintRead: vscode.TextEditorDecorationType;
   private tintWrite: vscode.TextEditorDecorationType;
@@ -49,58 +68,45 @@ export class Compositor implements vscode.Disposable {
   private dimLight!: vscode.TextEditorDecorationType;
 
   private transient = new Map<string, TransientState>();
-  /** role keys whose guide steps are not rendered at all (session state) */
-  private hiddenGuideRoles: ReadonlySet<string> = new Set();
-  private hiddenRolesEmitter = new vscode.EventEmitter<void>();
-  /** fired by setHiddenGuideRoles — the tree views mirror the filter from it */
-  readonly onDidChangeHiddenGuideRoles = this.hiddenRolesEmitter.event;
+  /** accent keys (accentKey) whose marks are not rendered at all (session state) */
+  private hiddenAccents: ReadonlySet<string> = new Set();
+  private hiddenEmitter = new vscode.EventEmitter<void>();
+  /** fired by setHiddenAccents — the tree views mirror the filter from it */
+  readonly onDidChangeHiddenAccents = this.hiddenEmitter.event;
 
-  constructor(
-    private getMarkers: (uri: vscode.Uri) => Marker[],
-    private getGuides: (uri: vscode.Uri) => Guide[],
-  ) {
-    for (const color of MARKER_COLORS) {
-      const rgb = PALETTE[color];
-      this.markerFull.set(
-        color,
+  constructor(private getState: (uri: vscode.Uri) => FileMarks) {
+    for (const paint of ACCENT_PAINTS) {
+      this.accentFull.set(
+        paint.dark,
         vscode.window.createTextEditorDecorationType({
           isWholeLine: true,
-          backgroundColor: `rgba(${rgb}, 0.14)`,
-          overviewRulerColor: `rgba(${rgb}, 0.7)`,
           overviewRulerLane: vscode.OverviewRulerLane.Center,
-          gutterIconPath: gutterIcon(rgb),
           gutterIconSize: 'contain',
+          dark: {
+            backgroundColor: `rgba(${paint.dark}, 0.12)`,
+            overviewRulerColor: `rgba(${paint.dark}, 0.7)`,
+            gutterIconPath: gutterIcon(paint.dark),
+          },
+          light: {
+            backgroundColor: `rgba(${paint.light}, 0.12)`,
+            overviewRulerColor: `rgba(${paint.light}, 0.7)`,
+            gutterIconPath: gutterIcon(paint.light),
+          },
         }),
       );
-      this.markerDim.set(
-        color,
+      this.accentDim.set(
+        paint.dark,
         vscode.window.createTextEditorDecorationType({
           isWholeLine: true,
-          backgroundColor: `rgba(${rgb}, 0.04)`,
-          overviewRulerColor: `rgba(${rgb}, 0.25)`,
           overviewRulerLane: vscode.OverviewRulerLane.Center,
-        }),
-      );
-    }
-    for (const rgb of GUIDE_ROLE_RGBS) {
-      this.guideFull.set(
-        rgb,
-        vscode.window.createTextEditorDecorationType({
-          isWholeLine: true,
-          backgroundColor: `rgba(${rgb}, 0.10)`,
-          overviewRulerColor: `rgba(${rgb}, 0.7)`,
-          overviewRulerLane: vscode.OverviewRulerLane.Center,
-          gutterIconPath: gutterIcon(rgb),
-          gutterIconSize: 'contain',
-        }),
-      );
-      this.guideDim.set(
-        rgb,
-        vscode.window.createTextEditorDecorationType({
-          isWholeLine: true,
-          backgroundColor: `rgba(${rgb}, 0.03)`,
-          overviewRulerColor: `rgba(${rgb}, 0.25)`,
-          overviewRulerLane: vscode.OverviewRulerLane.Center,
+          dark: {
+            backgroundColor: `rgba(${paint.dark}, 0.04)`,
+            overviewRulerColor: `rgba(${paint.dark}, 0.25)`,
+          },
+          light: {
+            backgroundColor: `rgba(${paint.light}, 0.04)`,
+            overviewRulerColor: `rgba(${paint.light}, 0.25)`,
+          },
         }),
       );
     }
@@ -141,13 +147,13 @@ export class Compositor implements vscode.Disposable {
     this.transient.set(uri.toString(), state);
   }
 
-  setHiddenGuideRoles(hidden: ReadonlySet<string>): void {
-    this.hiddenGuideRoles = hidden;
-    this.hiddenRolesEmitter.fire();
+  setHiddenAccents(hidden: ReadonlySet<string>): void {
+    this.hiddenAccents = hidden;
+    this.hiddenEmitter.fire();
   }
 
-  getHiddenGuideRoles(): ReadonlySet<string> {
-    return this.hiddenGuideRoles;
+  getHiddenAccents(): ReadonlySet<string> {
+    return this.hiddenAccents;
   }
 
   /** test hook */
@@ -184,7 +190,11 @@ export class Compositor implements vscode.Disposable {
     const lastLine = doc.lineCount - 1;
     const state = this.transient.get(doc.uri.toString()) ?? { tint: [] };
     const spot = state.spotlight;
-    const markers = this.clip(this.getMarkers(doc.uri), lastLine);
+    const fileMarks = this.getState(doc.uri);
+    const marks = this.clip(
+      fileMarks.marks.filter((m) => markVisible(m.accent, this.hiddenAccents)),
+      lastLine,
+    );
 
     const lineRangeOf = (r: LineRange): vscode.Range => {
       const end = Math.min(r.end, lastLine);
@@ -208,83 +218,79 @@ export class Compositor implements vscode.Disposable {
       editor.setDecorations(this.dimLight, []);
     }
 
-    // markers: full style in lit regions, suppressed style inside dimmed ones
+    // marks: full style in lit regions, suppressed style inside dimmed ones
     const isLit = (r: LineRange): boolean => !spot || intersectsAny(r, spot.lit);
-    for (const color of MARKER_COLORS) {
-      const full: vscode.Range[] = [];
-      const dim: vscode.Range[] = [];
-      for (const m of markers) {
-        if (m.color === color) {
-          const span = { start: m.startLine, end: m.endLine };
-          (isLit(span) ? full : dim).push(lineRangeOf(span));
-        }
-      }
-      editor.setDecorations(this.markerFull.get(color)!, full);
-      editor.setDecorations(this.markerDim.get(color)!, dim);
+    const full = new Map<string, vscode.Range[]>();
+    const dim = new Map<string, vscode.Range[]>();
+    for (const m of marks) {
+      const span = { start: m.startLine, end: m.endLine };
+      const bucket = isLit(span) ? full : dim;
+      const key = accentPaint(m.accent).dark;
+      bucket.set(key, [...(bucket.get(key) ?? []), lineRangeOf(span)]);
+    }
+    for (const [rgb, type] of this.accentFull) {
+      editor.setDecorations(type, full.get(rgb) ?? []);
+    }
+    for (const [rgb, type] of this.accentDim) {
+      editor.setDecorations(type, dim.get(rgb) ?? []);
     }
 
-    // guide steps: one accent per role, under the same lit/dim rule
-    const guides = this.getGuides(doc.uri).filter((g) => g.startLine <= lastLine);
-    const stepFull = new Map<string, vscode.Range[]>();
-    const stepDim = new Map<string, vscode.Range[]>();
-    for (const g of guides) {
-      for (const s of g.steps) {
-        if (s.startLine > lastLine || !stepVisible(s.role, this.hiddenGuideRoles)) {
-          continue;
-        }
-        const span = { start: s.startLine, end: Math.min(s.endLine, lastLine) };
-        const bucket = isLit(span) ? stepFull : stepDim;
-        const rgb = guideRoleRgb(s.role);
-        bucket.set(rgb, [...(bucket.get(rgb) ?? []), lineRangeOf(span)]);
-      }
-    }
-    for (const [rgb, type] of this.guideFull) {
-      editor.setDecorations(type, stepFull.get(rgb) ?? []);
-    }
-    for (const [rgb, type] of this.guideDim) {
-      editor.setDecorations(type, stepDim.get(rgb) ?? []);
-    }
-
-    // notes, at the start or end of the item's first line: marker notes, then
-    // guide summaries (function header) and numbered step notes
+    // notes, at the start or end of the mark's first line: ✎ manual notes,
+    // ✦ guide summaries (at the guide's first surviving mark), ① step notes
     const noteAtStart =
       vscode.workspace
         .getConfiguration('sightread')
         .get<string>('marker.notePosition', 'lineEnd') === 'lineStart';
-    const noteOption = (line: number, text: string, rgb: string): vscode.DecorationOptions => {
+    const noteOption = (
+      line: number,
+      text: string,
+      paint: AccentPaint,
+    ): vscode.DecorationOptions => {
       const noteStyle = {
         contentText: noteAtStart ? `${text} ` : ` ${text}`,
-        color: `rgba(${rgb}, 0.85)`,
         fontStyle: 'italic',
         margin: noteAtStart ? '0 0.8em 0 0' : '0 0 0 1.5em',
       };
       if (noteAtStart) {
         return {
           range: new vscode.Range(line, 0, line, 0),
-          renderOptions: { before: noteStyle },
+          renderOptions: {
+            before: noteStyle,
+            dark: { before: { color: `rgba(${paint.dark}, 0.85)` } },
+            light: { before: { color: `rgba(${paint.light}, 0.85)` } },
+          },
         };
       }
       const eol = doc.lineAt(line).text.length;
       return {
         range: new vscode.Range(line, eol, line, eol),
-        renderOptions: { after: noteStyle },
+        renderOptions: {
+          after: noteStyle,
+          dark: { after: { color: `rgba(${paint.dark}, 0.85)` } },
+          light: { after: { color: `rgba(${paint.light}, 0.85)` } },
+        },
       };
     };
-    const noteOptions: vscode.DecorationOptions[] = markers
-      .filter((m) => m.note)
-      .map((m) => noteOption(m.startLine, `✎ ${m.note}`, PALETTE[m.color]));
-    for (const g of guides) {
-      if (g.summary) {
-        noteOptions.push(noteOption(g.startLine, `✦ ${g.summary}`, GUIDE_RGB));
+    const noteOptions: vscode.DecorationOptions[] = [];
+    for (const g of fileMarks.guides) {
+      const envelope = guideEnvelope(fileMarks, g.id);
+      if (g.summary && envelope && envelope.startLine <= lastLine) {
+        noteOptions.push(noteOption(envelope.startLine, `✦ ${g.summary}`, GUIDE_PAINT));
       }
-      g.steps.forEach((s, i) => {
-        if (s.startLine <= lastLine && stepVisible(s.role, this.hiddenGuideRoles)) {
-          const role = s.role ? `[${s.role}] ` : '';
-          noteOptions.push(
-            noteOption(s.startLine, `${stepBadge(i)} ${role}${s.note}`, guideRoleRgb(s.role)),
-          );
-        }
-      });
+    }
+    for (const m of marks) {
+      if (m.guideId !== undefined) {
+        const role = m.accent.kind === 'role' && m.accent.role ? `[${m.accent.role}] ` : '';
+        noteOptions.push(
+          noteOption(
+            m.startLine,
+            `${stepBadge(m.order ?? 0)} ${role}${m.note ?? ''}`,
+            accentPaint(m.accent),
+          ),
+        );
+      } else if (m.note) {
+        noteOptions.push(noteOption(m.startLine, `✎ ${m.note}`, accentPaint(m.accent)));
+      }
     }
     editor.setDecorations(this.noteType, noteOptions);
 
@@ -305,23 +311,17 @@ export class Compositor implements vscode.Disposable {
     );
   }
 
-  private clip(markers: Marker[], lastLine: number): Marker[] {
-    return markers
+  private clip(marks: Mark[], lastLine: number): Mark[] {
+    return marks
       .filter((m) => m.startLine <= lastLine)
       .map((m) => (m.endLine <= lastLine ? m : { ...m, endLine: lastLine }));
   }
 
   dispose(): void {
-    for (const t of this.markerFull.values()) {
+    for (const t of this.accentFull.values()) {
       t.dispose();
     }
-    for (const t of this.markerDim.values()) {
-      t.dispose();
-    }
-    for (const t of this.guideFull.values()) {
-      t.dispose();
-    }
-    for (const t of this.guideDim.values()) {
+    for (const t of this.accentDim.values()) {
       t.dispose();
     }
     this.noteType.dispose();
@@ -330,6 +330,6 @@ export class Compositor implements vscode.Disposable {
     this.dimHeavy.dispose();
     this.dimMedium.dispose();
     this.dimLight.dispose();
-    this.hiddenRolesEmitter.dispose();
+    this.hiddenEmitter.dispose();
   }
 }

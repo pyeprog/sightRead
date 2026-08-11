@@ -4,7 +4,7 @@
  * responses may wrap it in code fences or prose — tolerated here.
  */
 
-import { Guide, InterpretUnit } from './guide';
+import { InterpretUnit } from './marks';
 
 export interface GuideParseInput {
   raw: string;
@@ -15,8 +15,28 @@ export interface GuideParseInput {
   endLine: number;
 }
 
+/** The parsed response's shape — the feature layer converts it into a Guide
+ *  shell plus step marks (core/marks.ts). */
+export interface ParsedGuideStep {
+  id: string;
+  startLine: number;
+  endLine: number;
+  note: string;
+  role?: string;
+}
+
+export interface ParsedGuide {
+  id: string;
+  subject: string;
+  unit: InterpretUnit;
+  summary?: string;
+  startLine: number;
+  endLine: number;
+  steps: ParsedGuideStep[];
+}
+
 export type GuideParseResult =
-  | { ok: true; guide: Guide }
+  | { ok: true; guide: ParsedGuide }
   | { ok: false; error: string };
 
 const MAX_STEPS = 30;
