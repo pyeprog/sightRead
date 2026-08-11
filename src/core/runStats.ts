@@ -23,11 +23,12 @@ export function recordDuration(recent: readonly number[], ms: number): number[] 
 
 /**
  * The typical duration: median of the recorded runs, robust against the odd
- * outlier run. The empirical prior until a first run has been recorded.
+ * outlier run. Until a first run is recorded, the prior — callers with a
+ * different run shape (repo exploration) pass their own.
  */
-export function typicalMs(recent: readonly number[]): number {
+export function typicalMs(recent: readonly number[], prior = DEFAULT_TYPICAL_MS): number {
   if (recent.length === 0) {
-    return DEFAULT_TYPICAL_MS;
+    return prior;
   }
   const sorted = [...recent].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);

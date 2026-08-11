@@ -13,6 +13,8 @@ export interface HarnessProfile {
   command: string;
   /** argv; "${prompt}" is substituted — without it the prompt is piped to stdin */
   args: string[];
+  /** argv for read-only repo exploration (more turns); absent = cannot explore */
+  exploreArgs?: string[];
   /** extra environment variables for the child process */
   env?: Record<string, string>;
   /** field of a JSON-envelope stdout holding the final text; omitted = raw stdout */
@@ -28,6 +30,8 @@ export const BUILTIN_HARNESSES: Record<string, HarnessProfile> = {
     command: 'claude',
     // deliberately no --bare: it skips OAuth and would break subscription users
     args: ['-p', PROMPT_PLACEHOLDER, '--output-format', 'json', '--max-turns', '1', '--allowedTools', ''],
+    // read-only tools only; exploration takes many tool calls — the run timeout is the real bound
+    exploreArgs: ['-p', PROMPT_PLACEHOLDER, '--output-format', 'json', '--max-turns', '40', '--allowedTools', 'Read,Grep,Glob,LS'],
     resultField: 'result',
     errorField: 'is_error',
   },
@@ -35,11 +39,15 @@ export const BUILTIN_HARNESSES: Record<string, HarnessProfile> = {
     // read-only sandbox is codex exec's default — explicit anyway; '-' reads the prompt from stdin
     command: 'codex',
     args: ['exec', '--skip-git-repo-check', '--sandbox', 'read-only', '-'],
+    // the read-only sandbox already explores — same argv
+    exploreArgs: ['exec', '--skip-git-repo-check', '--sandbox', 'read-only', '-'],
   },
   opencode: {
     // headless runs auto-reject permission asks, so denying edit/bash/webfetch cannot hang
     command: 'opencode',
     args: ['run', PROMPT_PLACEHOLDER],
+    // the env below already denies mutation while read/grep/glob stay — same argv
+    exploreArgs: ['run', PROMPT_PLACEHOLDER],
     env: {
       OPENCODE_CONFIG_CONTENT: '{"permission":{"edit":"deny","bash":"deny","webfetch":"deny"}}',
     },
@@ -85,7 +93,9 @@ function isValidProfile(p: unknown): p is HarnessProfile {
     typeof o.command === 'string' &&
     o.command.length > 0 &&
     Array.isArray(o.args) &&
-    o.args.every((a) => typeof a === 'string')
+    o.args.every((a) => typeof a === 'string') &&
+    (o.exploreArgs === undefined ||
+      (Array.isArray(o.exploreArgs) && o.exploreArgs.every((a) => typeof a === 'string')))
   );
 }
 
@@ -103,13 +113,19 @@ export function resolveHarness(
   return profile ? { name, profile } : undefined;
 }
 
-/** Expands ${prompt} in argv; with no placeholder the prompt goes to stdin. */
+/**
+ * Expands ${prompt} in argv; with no placeholder the prompt goes to stdin.
+ * `explore` picks the profile's exploreArgs when declared (capability gating
+ * lives in HarnessRunner.supportsExplore — this only falls back gently).
+ */
 export function buildInvocation(
   profile: HarnessProfile,
   prompt: string,
+  explore = false,
 ): { args: string[]; stdinPrompt?: string } {
   let substituted = false;
-  const args = profile.args.map((a) => {
+  const argv = explore && profile.exploreArgs ? profile.exploreArgs : profile.args;
+  const args = argv.map((a) => {
     if (a.includes(PROMPT_PLACEHOLDER)) {
       substituted = true;
       return a.replaceAll(PROMPT_PLACEHOLDER, prompt);

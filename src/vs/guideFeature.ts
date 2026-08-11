@@ -20,8 +20,9 @@ import type { GuideNode } from './markersView';
 import { InterpretTarget, resolveInterpretTarget } from './symbols';
 
 const RUN_TIMEOUT_MS = 180_000;
-/** globalState key: harness/unit → recent successful run durations (ms) */
-const DURATIONS_KEY = 'sightread.guide.runDurations';
+/** globalState key: `${harness}/${unit}` → recent successful run durations (ms);
+ *  shared with routeFeature, whose units are 'route' and 'trace' */
+export const DURATIONS_KEY = 'sightread.guide.runDurations';
 /** argv-size / token-cost guards for the one-shot prompt */
 const MAX_UNIT_LINES: Record<InterpretUnit, number> = { function: 1200, class: 1200, file: 2000 };
 const MAX_HEADER_LINES = 40;
@@ -70,7 +71,7 @@ export async function collectSubjectContext(
  * auto probed everything and found nothing; a named harness whose command is
  * not on PATH; a name that is neither builtin nor a customHarnesses key.
  */
-async function showHarnessNotFound(cfg: vscode.WorkspaceConfiguration): Promise<void> {
+export async function showHarnessNotFound(cfg: vscode.WorkspaceConfiguration): Promise<void> {
   const name = cfg.get<string>('guide.harness', 'auto');
   const custom = cfg.get<Record<string, HarnessProfile>>('guide.customHarnesses', {});
   let message: string;

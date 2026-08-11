@@ -15,6 +15,8 @@ export interface AgentInvocation {
   timeoutMs: number;
   /** progress-UI cancellation */
   signal?: AbortSignal;
+  /** run with the profile's exploreArgs (read-only repo exploration) */
+  explore?: boolean;
 }
 
 /**
@@ -28,6 +30,11 @@ export class HarnessRunner {
     private profile: HarnessProfile,
   ) {}
 
+  /** whether the profile declares an exploration argv (route planning needs it) */
+  supportsExplore(): boolean {
+    return this.profile.exploreArgs !== undefined;
+  }
+
   /** resolves false when the executable is not runnable from PATH */
   detect(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -40,7 +47,7 @@ export class HarnessRunner {
   /** resolves the model's final text; rejects with a user-facing message */
   run(inv: AgentInvocation): Promise<string> {
     return new Promise((resolve, reject) => {
-      const { args, stdinPrompt } = buildInvocation(this.profile, inv.prompt);
+      const { args, stdinPrompt } = buildInvocation(this.profile, inv.prompt, inv.explore === true);
       const child = spawn(this.profile.command, args, {
         cwd: inv.cwd,
         env: this.profile.env ? { ...process.env, ...this.profile.env } : process.env,
