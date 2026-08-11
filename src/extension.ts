@@ -262,6 +262,10 @@ export function activate(context: vscode.ExtensionContext): unknown {
       if (e.affectsConfiguration('sightread')) {
         invalidateHarnessCache();
         compositor.refreshDimTypes();
+        if (e.affectsConfiguration('sightread.palette')) {
+          compositor.refreshAccentTypes();
+          markersView.refresh(); // swatch icons are built per tree item
+        }
         compositor.renderVisible();
         scheduleRefresh();
       }

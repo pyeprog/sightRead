@@ -985,6 +985,20 @@
         "title": "Markers",
         "order": 3,
         "properties": {
+          "sightread.palette": {
+            "type": "string",
+            "enum": [
+              "vivid",
+              "soft"
+            ],
+            "enumDescriptions": [
+              "Vivid — brighter, higher-chroma accents; marks stand out at a glance",
+              "Soft — same hues with the chroma reined in; annotations recede, code stays the protagonist"
+            ],
+            "default": "vivid",
+            "order": 1,
+            "markdownDescription": "Color band for every mark accent — the 5 manual colors and the AI role colors, each with dark/light theme variants. Editor decorations and view swatches follow the setting live. Sidebar **label tints** come from contributed theme colors (`sightread.marker*` / `sightread.guide*`) whose defaults stay on the vivid values — override them via `#workbench.colorCustomizations#` if you want soft labels too."
+          },
           "sightread.marker.notePosition": {
             "type": "string",
             "enum": [
@@ -996,7 +1010,7 @@
               "At the end of the line, after the code"
             ],
             "default": "lineEnd",
-            "order": 1,
+            "order": 2,
             "markdownDescription": "Where a mark's note renders on its first marked line."
           }
         }

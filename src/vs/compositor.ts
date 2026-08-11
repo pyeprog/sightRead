@@ -1,20 +1,7 @@
 import * as vscode from 'vscode';
 import { LineRange, intersectsAny, subtractRanges } from '../core/focus';
-import {
-  FileMarks,
-  MARKER_COLORS,
-  Mark,
-  guideEnvelope,
-  markVisible,
-} from '../core/marks';
-import {
-  AccentPaint,
-  GUIDE_PAINT,
-  GUIDE_ROLE_PAINTS,
-  PALETTE,
-  accentPaint,
-  gutterIcon,
-} from './palette';
+import { FileMarks, Mark, guideEnvelope, markVisible } from '../core/marks';
+import { AccentPaint, accentPaint, accentPaints, guidePaint, gutterIcon } from './palette';
 
 const STEP_BADGES = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 
@@ -40,14 +27,6 @@ interface TransientState {
   tint: TintOccurrence[];
   spotlight?: SpotlightRender;
 }
-
-/** every accent paint a mark can take — one decoration pair per entry,
- *  deduplicated and keyed by the dark fragment */
-const ACCENT_PAINTS: AccentPaint[] = [
-  ...new Map(
-    [...MARKER_COLORS.map((c) => PALETTE[c]), ...GUIDE_ROLE_PAINTS].map((p) => [p.dark, p]),
-  ).values(),
-];
 
 /**
  * The single rendering coordinator (design.md §一.4): every decoration in the
@@ -75,7 +54,33 @@ export class Compositor implements vscode.Disposable {
   readonly onDidChangeHiddenAccents = this.hiddenEmitter.event;
 
   constructor(private getState: (uri: vscode.Uri) => FileMarks) {
-    for (const paint of ACCENT_PAINTS) {
+    this.refreshAccentTypes();
+    this.noteType = vscode.window.createTextEditorDecorationType({});
+    this.tintRead = vscode.window.createTextEditorDecorationType({
+      border: '1px solid rgba(100, 180, 255, 0.8)',
+      borderRadius: '2px',
+    });
+    this.tintWrite = vscode.window.createTextEditorDecorationType({
+      border: '1px solid rgba(255, 150, 50, 0.95)',
+      borderRadius: '2px',
+      fontWeight: 'bold',
+    });
+    this.refreshDimTypes();
+  }
+
+  /** (Re)creates the accent decoration pairs from the configured palette
+   *  band — one pair per paint, keyed by its dark fragment (unique per band,
+   *  and render() derives keys from the same band). */
+  refreshAccentTypes(): void {
+    for (const t of this.accentFull.values()) {
+      t.dispose();
+    }
+    for (const t of this.accentDim.values()) {
+      t.dispose();
+    }
+    this.accentFull.clear();
+    this.accentDim.clear();
+    for (const paint of accentPaints()) {
       this.accentFull.set(
         paint.dark,
         vscode.window.createTextEditorDecorationType({
@@ -110,17 +115,6 @@ export class Compositor implements vscode.Disposable {
         }),
       );
     }
-    this.noteType = vscode.window.createTextEditorDecorationType({});
-    this.tintRead = vscode.window.createTextEditorDecorationType({
-      border: '1px solid rgba(100, 180, 255, 0.8)',
-      borderRadius: '2px',
-    });
-    this.tintWrite = vscode.window.createTextEditorDecorationType({
-      border: '1px solid rgba(255, 150, 50, 0.95)',
-      borderRadius: '2px',
-      fontWeight: 'bold',
-    });
-    this.refreshDimTypes();
   }
 
   /** (Re)creates the opacity-based dim types from configuration. */
@@ -275,7 +269,7 @@ export class Compositor implements vscode.Disposable {
     for (const g of fileMarks.guides) {
       const envelope = guideEnvelope(fileMarks, g.id);
       if (g.summary && envelope && envelope.startLine <= lastLine) {
-        noteOptions.push(noteOption(envelope.startLine, `✦ ${g.summary}`, GUIDE_PAINT));
+        noteOptions.push(noteOption(envelope.startLine, `✦ ${g.summary}`, guidePaint()));
       }
     }
     for (const m of marks) {

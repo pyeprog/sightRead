@@ -10,7 +10,7 @@ import {
 } from '../core/marks';
 import { Compositor } from './compositor';
 import { MarkRepository } from './markRepository';
-import { GUIDE_PAINT, accentPaint, swatchIcon } from './palette';
+import { accentPaint, guidePaint, swatchIcon } from './palette';
 
 export interface FileNode {
   kind: 'file';
@@ -124,6 +124,11 @@ export class MarkersViewFeature
     return this.view.message;
   }
 
+  /** Re-renders all items (palette change: swatch icons are built per item). */
+  refresh(): void {
+    this.emitter.fire();
+  }
+
   /** Tree-only collapse/expand-all, mirrored into the when-clause context
    *  that swaps the title button. Never touches editor folding. */
   private setFolded(folded: boolean): void {
@@ -157,7 +162,7 @@ export class MarkersViewFeature
       const item = new vscode.TreeItem(`✦ ${g.subject}`, this.parentState());
       item.id = `guide:${node.uri.toString()}:${g.id}:g${this.generation}`;
       item.description = g.summary ?? `${steps.length} steps`;
-      item.iconPath = swatchIcon(GUIDE_PAINT);
+      item.iconPath = swatchIcon(guidePaint());
       item.contextValue = 'guide';
       item.tooltip = g.summary;
       const envelope = guideEnvelope(state, g.id);

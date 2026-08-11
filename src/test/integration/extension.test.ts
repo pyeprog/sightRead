@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { type Guide, type Mark, addGuide } from '../../core/marks';
+import { accentPaint } from '../../vs/palette';
 import type { Compositor, SpotlightRender } from '../../vs/compositor';
 import type { EntriesFeature } from '../../vs/entries';
 import { type MarkRepository, migrateLegacyStorage } from '../../vs/markRepository';
@@ -800,6 +801,22 @@ suite('SightRead integration', () => {
     api._test.compositor.setHiddenAccents(new Set());
     assert.strictEqual(view.getChildren(guideNode).length, 2, 'clearing the filter restores steps');
     api._test.repo.set(doc.uri, { marks: [], guides: [] });
+  });
+
+  test('palette setting switches every accent paint between the two bands', async () => {
+    const cfg = vscode.workspace.getConfiguration('sightread');
+    const yellow = { kind: 'color', color: 'yellow' } as const;
+    const primary = { kind: 'role', role: 'main' } as const;
+    assert.strictEqual(accentPaint(yellow).dark, '212, 187, 48', 'vivid is the default');
+    await cfg.update('palette', 'soft', vscode.ConfigurationTarget.Global);
+    try {
+      assert.strictEqual(accentPaint(yellow).dark, '196, 178, 91');
+      assert.strictEqual(accentPaint(yellow).light, '102, 88, 0');
+      assert.strictEqual(accentPaint(primary).dark, '231, 158, 107', 'role tiers follow too');
+    } finally {
+      await cfg.update('palette', undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.strictEqual(accentPaint(yellow).dark, '212, 187, 48', 'reset restores vivid');
   });
 
   test('markers: message counts hidden marks; clearing marks restores the welcome', async () => {

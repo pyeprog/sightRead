@@ -231,7 +231,7 @@ src/
 - **item 右键菜单**：组序 导航 → 标记/编辑 → 视图操作 → 删除（垫底）；inline 图标只有垃圾桶、只出现在"item 本身是可删对象"处。
 - **树 item description 语法**：`[状态符号] · [L位置] · [文本/预览]`，分隔符 ` · `，位置 `L12` / `L12–20`。
 - **"被标记"的三层视觉**：swatch 图标 = 身份（item 就是那个标记）、label 染色 = 属性（item 覆盖被标记的代码）、gutter 竖条 = 位置（编辑器内）；色板三处同源（PALETTE / contributes.colors）。
-- **色板（2026-08-11 定稿"同带鲜亮"）**：十二 accent（手动 5 + 角色 7）取同一条 oklch 带——深色 `L .79 C .15`、浅色 `L .50 C .14`（plumbing 刻意近灰 `C .04`），逐色域映射（降彩度）到 sRGB。每个 accent 双主题：`AccentPaint { dark, light }`；编辑器装饰（行背景 0.12 / 尺标 / gutter 竖条 / note 文字 0.85）走 DecorationRenderOptions 的 `light:`/`dark:` 分支，swatch 图标出 `{light, dark}` URI 对，树 label 走 contributes.colors（dark/light/hc 四值）——修掉旧版"浅色主题沿用暗色板"的硬伤。改色只动 palette.ts 与 package.json colors 两处，透明度动 compositor。
+- **色板（2026-08-11 定稿，双带可选）**：十二 accent（手动 5 + 角色 7）取同一条 oklch 带，逐色域映射（降彩度）到 sRGB，每个 accent 双主题 `AccentPaint { dark, light }`。两条带由 `sightread.palette` 选：**vivid**（默认，深 `L .79 C .15` / 浅 `L .50 C .14`）与 **soft**（深 `L .76 C .11` / 浅 `L .46 C .11`；plumbing 均近灰）。编辑器装饰（行背景 0.12 / 尺标 / gutter 竖条 / note 文字 0.85）走 DecorationRenderOptions 的 `light:`/`dark:` 分支，切设置时 compositor 重建 accent 装饰对（refreshAccentTypes，与 dim 档同款模式）；swatch 图标出 `{light, dark}` URI 对、按 item 现取现建，跟随设置。**树 label 是唯一切不动的层**：FileDecoration 只吃 ThemeColor，contributes.colors 的默认值静态钉在 vivid（同色相、仅明彩度差，soft 下违和很小；要全 soft 用 workbench.colorCustomizations 覆盖）。修掉旧版"浅色主题沿用暗色板"的硬伤。改带只动 palette.ts 的 BANDS；透明度动 compositor。
 - **Settings**：configuration 用分节数组、节与节内按使用频率排 order；描述一律 markdownDescription，写清作用、默认值含义、何时需要改；enum 必带 enumDescriptions。
 
 ## 六、已知风险与待实证项

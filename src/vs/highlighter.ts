@@ -13,7 +13,7 @@ import {
 } from '../core/marks';
 import { Compositor } from './compositor';
 import { MarkRepository, newId } from './markRepository';
-import { PALETTE, swatchIcon } from './palette';
+import { markerPaint, swatchIcon } from './palette';
 import { findFunctionAtCursor } from './symbols';
 
 function capitalize(color: MarkerColor): string {
@@ -24,7 +24,7 @@ export async function pickMarkerColor(): Promise<MarkerColor | undefined> {
   const picked = await vscode.window.showQuickPick(
     MARKER_COLORS.map((c) => ({
       label: capitalize(c),
-      iconPath: swatchIcon(PALETTE[c]),
+      iconPath: swatchIcon(markerPaint(c)),
       color: c,
     })),
     { title: 'Marker Color' },
