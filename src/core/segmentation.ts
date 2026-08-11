@@ -384,8 +384,11 @@ function classify(top: string[], opts: SegmentationOptions): Summary {
   if (def) {
     return { kind: 'definition', name: def[2] ? `${def[1]} ${def[2]}` : def[1] };
   }
+  // Only a lone statement or a block form (indented body follows) is a
+  // definition unit — a one-line arrow merged into a statement group must
+  // not claim the whole group's name.
   const fnAssign = first.match(FUNCTION_ASSIGN_RE);
-  if (fnAssign) {
+  if (fnAssign && (top.length === 1 || indentOf(top[1]) > indentOf(top[0]))) {
     return {
       kind: 'definition',
       name: `${fnAssign[1]} = ${fnAssign[2].startsWith('function') ? 'function' : '() =>'}`,
