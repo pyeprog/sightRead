@@ -191,6 +191,7 @@ export class GuideFeature implements vscode.Disposable {
     const durations = this.stats.get<Record<string, number[]>>(DURATIONS_KEY, {});
     const statsKey = `${runner.name}/${target.unit}`;
     const typicalS = Math.round(typicalMs(durations[statsKey] ?? []) / 1000);
+    const model = cfg.get<string>('guide.model', '').trim() || undefined;
 
     let raw: string;
     const startMs = Date.now();
@@ -198,7 +199,8 @@ export class GuideFeature implements vscode.Disposable {
       raw = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `SightRead: interpreting ${target.name} via ${runner.name}…`,
+          // the title names the model so an unset setting is visible as such
+          title: `SightRead: interpreting ${target.name} via ${runner.name}${model ? ` · ${model}` : ' (default model)'}…`,
           cancellable: true,
         },
         (progress, token) => {
@@ -214,7 +216,7 @@ export class GuideFeature implements vscode.Disposable {
             progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
           }, 1000);
           return runner
-            .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal })
+            .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal, model })
             .finally(() => clearInterval(ticker));
         },
       );

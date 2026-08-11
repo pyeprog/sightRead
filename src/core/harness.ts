@@ -131,14 +131,24 @@ export function resolveHarness(
  * Expands ${prompt} in argv; with no placeholder the prompt goes to stdin.
  * `explore` picks the profile's exploreArgs when declared (capability gating
  * lives in HarnessRunner.supportsExplore — this only falls back gently).
+ * `model` is appended as `--model <value>` — the one flag every builtin CLI
+ * shares — kept ahead of a trailing stdin marker so flags precede the
+ * positional (codex).
  */
 export function buildInvocation(
   profile: HarnessProfile,
   prompt: string,
   explore = false,
+  model?: string,
 ): { args: string[]; stdinPrompt?: string } {
   let substituted = false;
-  const argv = explore && profile.exploreArgs ? profile.exploreArgs : profile.args;
+  let argv = explore && profile.exploreArgs ? profile.exploreArgs : profile.args;
+  if (model) {
+    argv =
+      argv[argv.length - 1] === '-'
+        ? [...argv.slice(0, -1), '--model', model, '-']
+        : [...argv, '--model', model];
+  }
   const args = argv.map((a) => {
     if (a.includes(PROMPT_PLACEHOLDER)) {
       substituted = true;

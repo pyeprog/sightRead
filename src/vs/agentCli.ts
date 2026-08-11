@@ -17,6 +17,8 @@ export interface AgentInvocation {
   signal?: AbortSignal;
   /** run with the profile's exploreArgs (read-only repo exploration) */
   explore?: boolean;
+  /** appended as `--model <value>`; undefined = the CLI's own default model */
+  model?: string;
 }
 
 /**
@@ -47,7 +49,12 @@ export class HarnessRunner {
   /** resolves the model's final text; rejects with a user-facing message */
   run(inv: AgentInvocation): Promise<string> {
     return new Promise((resolve, reject) => {
-      const { args, stdinPrompt } = buildInvocation(this.profile, inv.prompt, inv.explore === true);
+      const { args, stdinPrompt } = buildInvocation(
+        this.profile,
+        inv.prompt,
+        inv.explore === true,
+        inv.model,
+      );
       const child = spawn(this.profile.command, args, {
         cwd: inv.cwd,
         env: this.profile.env ? { ...process.env, ...this.profile.env } : process.env,
