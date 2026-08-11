@@ -6,7 +6,7 @@
 
 ## 一、总原则
 
-1. **100% 本地静态**：无 LLM、无网络依赖，一切毫秒级响应。
+1. **主要功能本地静态**：视觉辅助层无网络依赖、毫秒级响应；LLM 只提供必要的信息增益（解读与路线，§3.8）——永远显式发起、可选、不自动运行。
 2. **标注是短命的**：服务于当前这轮阅读，过期即弃。宁可误删，不留脏。不做导出、分享、过期检测。
 3. **语义正交**：五个功能各占一条轴——结构（段落化）、注意力（聚光灯）、数据流（变量染色）、判断（荧光笔）、细节层级（骨架折叠）。
 4. **渲染冲突集中治理**：所有装饰经由唯一的渲染协调器（compositor）下发，任何功能不得直接调 `setDecorations`。
@@ -130,15 +130,43 @@
 - **激活与生命周期**：
   - **仅视图可见时记录**（entriesView 的 watching 门控同款）；录制中 ⇔ 面板可见，面板即状态指示器，不设状态栏图标。
   - 规则的不可见靠两层消解：① `viewsWelcome` 空态文案在"打开面板发现是空的"这个惊奇现场解释规则；② 隐藏期只把 settled 状态推入**小环形缓冲**（12 条 / 3 分钟窗口，管线现成数据、零查询），视图打开时回放缓冲——"刚才那几跳"当场显形，也顺带桥接 visible 在切侧栏时的闪断。
-  - 标题栏 ⏸/▶（context key `sightread.trailPaused`）与 🗑 清空；右键单删节点（连带只有它能到达的子孙；共享的、被 pin 的幸存）。
+  - 标题栏 ⏸/▶（context key `sightread.trailPaused`）、🗑 清空、🗺 规划路线（§3.8.3）；右键单删节点（连带只有它能到达的子孙；共享的、被 pin 的幸存）与 `Go to Caller Site`（跳到父节点中的调用行）。暂停指示与路线名共用树顶 message 行（`⏸ paused · Route: <label>`），view.description 弃用（2026-08-11 统一）。
   - **纯内存、不持久化**（原则 2：标注是短命的），杜绝历史堆积；300 节点兜底上限，按**整树最近访问时间**驱逐、永不动最活跃的树。
 - **重要性显示，无任何行为计数**——visitCount 被否决：settle 计数度量的是光标抖动习惯而非重要性，dwell time 同罪（午饭问题）。替代为两个无噪声来源：
-  - 客观 = 图拓扑：发现入度 ≥2 的节点 description 显示 `↗ n callers`（跳转是刻意动作，抖动伪造不出边）；出度与探索深度由子树形状自然可见；
+  - 客观 = 图拓扑：由树形自然可见——共用函数在每个发现它的调用方下镜像出现，出度与探索深度即子树形状。~~入度 ≥2 的节点 description 显示 `↗ n callers`~~（2026-08-11 删除：想看调用方，点进定义查 reference 一步即达，徽章无谓占用 description）；
   - 主观 = 荧光笔联动：函数体内有 marker 的节点 label 染 marker 色（FileDecorationProvider，自定义 scheme `sightread-trail`，与 Segments 视图同构）——重要性由人判断、由图定位；不另设 pin/star 判断通道（语义正交：判断属于荧光笔）。
-- **显示通道分配**（2026-07-14）：label = 从属 + 名字——方法显示为 `ClassName.method`（containerName 本就在节点身份 key 里，只是补上显示；嵌套函数显示为 `outer.inner`，同为真实从属）。从属是主要阅读信息（"当前函数调用了哪些**类**的方法"），占主通道且参与树的 type-to-filter。description 只留结构徽标（↻ 递归 / ↗ n callers），**不显示文件名**——位置是点击随手可达的信息，降级到 tooltip（`相对路径:行号` + called at line N）。label = 身份与从属、description = 图拓扑、tooltip = 位置，与通道独占原则同构。
+- **显示通道分配**（2026-07-14，2026-08-11 修订）：label = 从属 + 名字——方法显示为 `ClassName.method`（containerName 本就在节点身份 key 里，只是补上显示；嵌套函数显示为 `outer.inner`，同为真实从属）。从属是主要阅读信息（"当前函数调用了哪些**类**的方法"），占主通道且参与树的 type-to-filter。description = **occurrence 级**徽标：★（路线 core 节点，§3.8.3）、↻ 递归、`↙ line 88`（本次出现在父函数中的调用行——**点击到不了的位置必须可见**：点击到达的是定义，callsite 只有这里能看到；配套右键 `Go to Caller Site` 一步跳达。同一函数的不同镜像出现各有各的调用行，恰是 occurrence 级信息归 description 的理由）。**不显示文件名**——定义位置是点击随手可达的信息，降级到 tooltip（`相对路径:行号` + 路线 note）。label = 身份与从属、description = 出现位置的徽标、tooltip = 定义位置与备注。
 - 光标 settle 在已有节点内 → touch + `reveal({select, focus:false})` 跟随；根排序按创建序倒序（新树在上），刻意**不**按访问时间排——阅读中实时重排会晃。
 - 编辑漂移：节点 key 不含行号（uri + 容器名 + 名字），range 信息每次到访自愈；跨文件跳转落点符号未就绪（LS 冷启动）给 600ms 宽限再解析一次，仍无则按模块语义处理。
-- v2 预留：右键节点按需 call-hierarchy 扩展（机器补的边用暗色区别于亲脚走过的边）；与 Entry Points 联动（从入口开始读时自动种根）。
+- v2 预留：右键节点按需 call-hierarchy 扩展；与 Entry Points 联动（从入口开始读时自动种根）。"机器补的边用暗色区别于亲脚走过的边"已由 AI 路线落地（§3.8.3）。
+
+### 3.8 AI 辅助层（解读 2026-07-30；路线 2026-08-11）
+
+AI 不代读，只提供信息增益。两个形态——**解读**（局部："这段代码怎么读"）与**路线**（全局："为了这个目标，从哪开始读、顺什么链读"）——共用一套 agent harness 与同一条哲学：**note 是路标不是转述**，说角色与存在理由，永不复述代码做了什么（读者自己会读）。
+
+**3.8.1 agent harness（机制）**
+
+- 复用用户已有的 coding-agent CLI，headless 单发运行（订阅即用，不经手 API key）。`HarnessProfile { command, args（${prompt} 占位，缺省走 stdin）, exploreArgs?, env?, resultField?, errorField? }`；内置 claude / codex / opencode / pi / cursor（`cursor-agent` 别名探测，主名 `agent` 太泛）/ aider / agy。`sightread.guide.harness = auto` 按市场份额序探测（Cursor 宿主提前 cursor）；`customHarnesses` 同名整体覆盖、不做字段合并。
+- 两档 argv：**解读档**（无工具、单轮——代码随 prompt 附上）与**探索档 `exploreArgs`**（只读工具、多轮，路线专用；claude/codex/opencode 内置，未声明探索档的 harness 对路线明确报"不支持"）。
+- prompt = 模板（按单位/场景，settings 可换）+ **恒定 JSON 契约收尾**——永远追加在最后、声明冲突时获胜，解析器只依赖契约。响应解析带容错阶梯（裸 JSON → ```json 围栏 → 首尾大括号截取）。
+- 时长反馈：进度条 1s 秒表 `typically ~Ns · limit Ns · elapsed Ns`（恒定前缀 + 末尾计数——变化的前缀会让通知反复重排换行）；typical = 每个 `harness/单位` 键最近 10 次**成功**运行的中位数（globalState，超时与取消不计），首跑用经验先验（解读 60s / 探索 120s）。
+- 可观察性：**"SightRead" Output channel** 记录每次路线运行的原始回复 + 每个被丢弃/落根/退行号 hop 的原因——树长歪时能区分"AI 答成这样"与"好答案被解析掰坏"。
+
+**3.8.2 AI 解读（guide）**
+
+- 三个解读单位 function/class/file：光标层级自动判定（最内函数 → 所在类 → 文件），选区取完整覆盖的最小单位。
+- 产出 = 就地标注的角色步骤（行区间 + role + note）：函数分结构层（main/setup/fallback/special）与实体层（entity，上限 9——7±2 工作记忆上限）；类按成员（entry/helper/util/lifecycle/state）；文件按顶层块（config/types/core/wiring/util/exports）。steps 恒按行序——"导读顺序"因千人千面被否决。
+- role 词表开放（自定义模板可造新 tag）⇒ 显示过滤必须数据驱动：多选 QuickPick 列当前文件实际出现的 role ∪ 已隐藏 role；状态为隐藏集（新 role 默认可见），单一来源在 compositor，全局生效。
+- 解读是短命的（原则 2 wholesale 适用）：单位范围内的任何编辑删除整份解读，范围外只平移行号；新解读顶掉与之重叠的旧解读（函数解读顶掉文件概览）。存储于 workspaceState，渲染挂 Markers 视图 ✦ 节点 + 编辑器就地着色。
+
+**3.8.3 AI 阅读路线（route / trace）**
+
+- **动机**：全局阅读指引此前靠搜索和猜。两个场景：**A（Plan Route）**输入阅读意图 → 从入口顺到实现的路线；**B（Trace Entries）**光标处代码 → 反向列出**全部**到达它的入口及各自的链。
+- **答案的形状就是 §3.7 的图**：agent 在 workspace 根只读探索后输出 hop 树，种入 TrailGraph 作 **planned** 节点/边（暗色）。不建新视图——路线的目的就是被走，计划与足迹必须画在同一张地图上，走到哪一步、在哪走岔一目了然。
+- **契约要点**：hop = `{file, symbol, container?, kind, line, note, core?, calledBy?, callsiteLine?}`。hops 数组顺序**不携带语义**（steps 行序的同一教训），结构只来自 calledBy；坏引用/成环在解析器确定性落根。`core: true` 语义标注（A = 真正实现目标的 meat、B = 每个入口）→ 渲染为 ★——序号徽章被否决（进深已表达顺序，个人化的阅读次序不标）。每树 ≤12 跳；**树数不设限**——入口列表必须完整，被砍掉的入口是 surprise；解析器 60 跳硬保险只防跑飞。找不到目标 → 空 hops + summary 说明，原样展示为 "no route — …"。
+- **转正规则（到达即点亮）**：planned 节点被 touch/upsert（光标落入、点击树条目皆算）即转正，亮暗**只跟节点不跟边**——曾按"边未走过则该出现位置保持暗"渲染，点击后毫无视觉反馈，废弃；真实跳转把 planned 边转正并用实测行号替换 AI 猜的 callsite（未知 callsite 存哨兵值：排序垫底、不显示）。已走节点被路线覆盖时绝不变暗、自愈位置不被 AI 数据覆盖，只取路线徽章。
+- **多路线并存**：路线是实体（id + label），新路线不替换旧的；树顶 message 显示**选中节点所属路线**；`Clear Routes` 一次清光 planned 元素与徽章，trailClear 连注册表全清。planned 免驱逐（与 pinned 同款豁免），纯内存（原则 2）。种入按结构先序**倒序**建节点——配合"新者在上"的根排序，路线的根以第 1 跳在顶正序显示。
+- **hop 定位**（vs 层）：openTextDocument + DocumentSymbol 按名匹配（container 命中优先、离 AI 行号提示近者次之），节点 key 与真实行走的构造逐字一致——走到即经 upsert 点亮；找不到符号退 AI 行号提示、留暗待走亮或 Clear Routes；绝对路径/含 `..` 的 hop 丢弃，引用者落根。
 
 ## 四、架构
 
@@ -150,11 +178,18 @@ src/
     focus.ts          焦点集合计算、行区间代数（merge/subtract/contain）
     enclosing.ts      "当前函数"选择（显式命令取最内层 vs 聚光灯的头行让位）
     entries.ts        入口点分类（引用位置 + 语言语法提示）
-    trail.ts          阅读轨迹图模型（节点/边/树投影/环覆盖/删除与驱逐）
+    trail.ts          阅读轨迹图模型（节点/边/树投影/环覆盖/删除与驱逐 + planned 路线）
     jumpClassify.ts   结构跳转分类（drill-in / ref-jump 的语义签名识别）
+    guide.ts          AI 解读数据操作（编辑同步/role 过滤/行区间查询）
+    guidePrompt.ts    解读 prompt 组装（单位模板 + 恒定 JSON 契约）
+    guideParse.ts     解读响应解析（容错阶梯 + 步骤校验裁剪）
+    routePrompt.ts    路线/溯源 prompt 组装（两场景模板 + 共用契约）
+    routeParse.ts     路线响应解析（calledBy 解链/断环/落根 + 丢弃记录）
+    harness.ts        agent harness profile（内置七家 + argv 组装 + 结果抽取）
+    runStats.ts       harness 运行时长统计（中位数 typical）
   vs/              平台层
     compositor.ts     唯一渲染出口：装饰类型注册 + 图层/模式合成
-    symbols.ts        函数查找（executeDocumentSymbolProvider，两种语义见 core/enclosing）
+    symbols.ts        函数查找（executeDocumentSymbolProvider，两种语义见 core/enclosing）+ 按名定位（路线播种）
     segmentCache.ts   按文档版本缓存的切段结果
     highlighter.ts    荧光笔命令 + workspaceState 持久化 + 编辑跟踪
     variableTint.ts   occurrence 获取与降级
@@ -163,14 +198,18 @@ src/
     segmentsView.ts   Segments 树视图（光标联动 + 亮暗镜像）+ Go to Segment
     markersView.ts    Markers 树视图（按文件分组，快捷涂色/删除）
     entriesView.ts    Entry Points 树视图 + gutter 图标 + Go to Entry Point
-    trailView.ts      Trail 树视图（记录器 + LSP 验证 + 可见性门控 + 回放缓冲）
+    trailView.ts      Trail 树视图（记录器 + LSP 验证 + 可见性门控 + 回放缓冲 + 路线播种/点亮）
+    agentCli.ts       harness 探测与 headless 驱动（spawn/超时/取消）
+    guideFeature.ts   AI 解读命令流（目标解析 → prompt → 进度 → 入库渲染）
+    routeFeature.ts   AI 路线命令流（goal/光标 → 探索运行 → hop 定位 → 种入 trail）
+    itemRepository.ts workspaceState 仓储基类（marker/guide 共用）
     palette.ts        荧光笔调色板与 gutter/树图标生成
   extension.ts     事件接线：统一的光标管线（防抖 + 过期令牌），文档变更分发
 ```
 
 统一光标管线：`selection 变化 → 找函数 → 喂 trail/各视图 reveal → 算 tint → 算段落 → 算焦点 → compositor.render`。中途文档/光标再变则丢弃（令牌失效）。settled 状态是唯一数据源：trail 记录器与 Entry Points / Markers / Segments 三个视图的光标跟随都消费它。
 
-存储只有一个：荧光笔库（workspaceState）。段落是带缓存的现算，变量染色和折叠零存储，阅读轨迹纯内存（关窗即弃）。
+存储两处：荧光笔与 AI 解读库（workspaceState），harness 运行时长（globalState——时长属于本机的 CLI，不属于某个 workspace）。段落是带缓存的现算，变量染色和折叠零存储，阅读轨迹与 AI 路线纯内存（关窗即弃）。
 
 ## 五、已知风险与待实证项
 

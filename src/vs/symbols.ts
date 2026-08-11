@@ -8,6 +8,7 @@ import {
   chooseOutermostFunction,
 } from '../core/enclosing';
 import { InterpretUnit } from '../core/guide';
+import { stripParens } from '../core/jumpClassify';
 
 const FUNCTION_KINDS = new Set<vscode.SymbolKind>([
   vscode.SymbolKind.Function,
@@ -56,6 +57,21 @@ export interface EnclosingFunctions {
   at?: SymbolAtCursor;
 }
 
+async function documentSymbols(
+  doc: vscode.TextDocument,
+): Promise<(vscode.DocumentSymbol | vscode.SymbolInformation)[]> {
+  try {
+    return (
+      (await vscode.commands.executeCommand<(vscode.DocumentSymbol | vscode.SymbolInformation)[]>(
+        'vscode.executeDocumentSymbolProvider',
+        doc.uri,
+      )) ?? []
+    );
+  } catch (_e) {
+    return [];
+  }
+}
+
 /** Multi-line symbols whose line span contains [`pos`, `endPos`] (line-based,
  *  so the header's indentation and the closing brace's tail count as inside). */
 async function collectContaining(
@@ -63,14 +79,7 @@ async function collectContaining(
   pos: vscode.Position,
   endPos: vscode.Position = pos,
 ): Promise<Candidate[]> {
-  let roots: (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined;
-  try {
-    roots = await vscode.commands.executeCommand<
-      (vscode.DocumentSymbol | vscode.SymbolInformation)[]
-    >('vscode.executeDocumentSymbolProvider', doc.uri);
-  } catch (_e) {
-    return [];
-  }
+  const roots = await documentSymbols(doc);
 
   const containing: Candidate[] = [];
   const visit = (
@@ -99,8 +108,62 @@ async function collectContaining(
       s.children.forEach((c) => visit(c, s.name));
     }
   };
-  (roots ?? []).forEach((s) => visit(s, undefined));
+  roots.forEach((s) => visit(s, undefined));
   return containing;
+}
+
+/** A named symbol located for route seeding, as the provider reports it. */
+export interface NamedSymbol {
+  name: string;
+  containerName?: string;
+  kind: vscode.SymbolKind;
+  range: vscode.Range;
+}
+
+/**
+ * Finds a symbol by name in one document, for seeding AI-planned trail
+ * nodes. Names compare via stripParens (C-family providers append parameter
+ * lists). A container match ranks first, then the smallest distance to
+ * `lineHint`; ties keep document order.
+ */
+export async function findSymbolByName(
+  doc: vscode.TextDocument,
+  name: string,
+  containerName?: string,
+  lineHint?: number,
+): Promise<NamedSymbol | undefined> {
+  const wanted = stripParens(name);
+  const wantedContainer = containerName === undefined ? undefined : stripParens(containerName);
+  const matches: NamedSymbol[] = [];
+  const visit = (
+    s: vscode.DocumentSymbol | vscode.SymbolInformation,
+    container?: string,
+  ): void => {
+    if (stripParens(s.name) === wanted) {
+      matches.push({
+        name: s.name,
+        containerName: 'containerName' in s && s.containerName ? s.containerName : container,
+        kind: s.kind,
+        range: 'location' in s ? s.location.range : s.range,
+      });
+    }
+    if ('children' in s) {
+      s.children.forEach((c) => visit(c, s.name));
+    }
+  };
+  (await documentSymbols(doc)).forEach((s) => visit(s, undefined));
+  const score = (m: NamedSymbol): number[] => [
+    wantedContainer !== undefined &&
+    m.containerName !== undefined &&
+    stripParens(m.containerName) === wantedContainer
+      ? 0
+      : 1,
+    lineHint === undefined ? 0 : Math.abs(m.range.start.line - lineHint),
+  ];
+  return matches
+    .map((m) => ({ m, s: score(m) }))
+    .sort((a, b) => a.s[0] - b.s[0] || a.s[1] - b.s[1])
+    .map((x) => x.m)[0];
 }
 
 const info = (c: Candidate | undefined): FunctionInfo | undefined =>

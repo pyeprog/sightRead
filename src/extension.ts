@@ -13,6 +13,7 @@ import {
   handleGuideDocumentChange,
 } from './vs/guideFeature';
 import { MarkersViewFeature } from './vs/markersView';
+import { RouteFeature } from './vs/routeFeature';
 import { SegmentCache } from './vs/segmentCache';
 import {
   SegmentsViewFeature,
@@ -55,6 +56,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const entriesView = new EntriesViewFeature();
   const trailView = new TrailViewFeature(repo);
   const guideFeature = new GuideFeature(guideRepo, compositor, context.globalState);
+  const routeFeature = new RouteFeature(trailView, context.globalState);
   context.subscriptions.push(
     compositor,
     markersView,
@@ -62,6 +64,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     entriesView,
     trailView,
     guideFeature,
+    routeFeature,
   );
   const spotlightStatus = vscode.window.createStatusBarItem(
     'sightread.spotlight',

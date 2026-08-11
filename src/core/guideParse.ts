@@ -21,7 +21,8 @@ export type GuideParseResult =
 
 const MAX_STEPS = 30;
 
-function extractJson(raw: string): unknown | undefined {
+/** Fence/prose tolerance ladder, shared with routeParse. */
+export function extractJson(raw: string): unknown | undefined {
   const candidates = [raw.trim()];
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(raw);
   if (fenced) {

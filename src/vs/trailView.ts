@@ -7,7 +7,13 @@ import {
   stripParens,
 } from '../core/jumpClassify';
 import { markersInLineRange } from '../core/markers';
-import { TrailGraph, TrailNodeInput, TrailNodeKind } from '../core/trail';
+import {
+  RouteHopInput,
+  TrailGraph,
+  TrailNodeInput,
+  TrailNodeKind,
+  UNKNOWN_CALLSITE,
+} from '../core/trail';
 import { MarkerRepository } from './highlighter';
 import { markerThemeColor } from './palette';
 import { SymbolAtCursor, findEnclosingFunctions } from './symbols';
@@ -40,6 +46,7 @@ const KIND_ICONS: Record<TrailNodeKind, string> = {
   module: 'symbol-file',
 };
 
+
 /** A settled cursor state, fed by the extension's cursor pipeline. */
 export interface TrailSettled {
   uriString: string;
@@ -66,7 +73,7 @@ export interface TrailElement {
   callsiteLine?: number;
 }
 
-function trailKind(kind: vscode.SymbolKind): TrailNodeKind {
+export function trailKind(kind: vscode.SymbolKind): TrailNodeKind {
   switch (kind) {
     case vscode.SymbolKind.Method:
     case vscode.SymbolKind.Constructor:
@@ -85,13 +92,33 @@ function basename(uriString: string): string {
   return path.split('/').pop() ?? path;
 }
 
+/**
+ * The graph key of a symbol node. Route seeding must reproduce exactly what
+ * walking produces, or planned nodes would never light up — `containerName`
+ * is the provider's raw value, the name is stripped.
+ */
+export function trailNodeKey(uriString: string, name: string, containerName?: string): string {
+  return `${uriString}#${containerName ?? ''}#${stripParens(name)}`;
+}
+
+/** Graph node for a whole file, aligned with nodeOf's module branch. */
+export function moduleNodeOf(uriString: string, lineCount: number): TrailNodeInput {
+  return {
+    key: `${uriString}#<module>`,
+    name: basename(uriString),
+    kind: 'module',
+    uriString,
+    line: 0,
+    endLine: Math.max(0, lineCount - 1),
+  };
+}
+
 /** Graph node for a settled state: its enclosing symbol, or the module itself. */
 function nodeOf(s: TrailSettled): TrailNodeInput {
   if (s.at) {
-    const name = stripParens(s.at.name);
     return {
-      key: `${s.uriString}#${s.at.containerName ?? ''}#${name}`,
-      name,
+      key: trailNodeKey(s.uriString, s.at.name, s.at.containerName),
+      name: stripParens(s.at.name),
       containerName: s.at.containerName ? stripParens(s.at.containerName) : undefined,
       kind: trailKind(s.at.kind),
       uriString: s.uriString,
@@ -99,14 +126,7 @@ function nodeOf(s: TrailSettled): TrailNodeInput {
       endLine: s.at.range.end.line,
     };
   }
-  return {
-    key: `${s.uriString}#<module>`,
-    name: basename(s.uriString),
-    kind: 'module',
-    uriString: s.uriString,
-    line: 0,
-    endLine: Math.max(0, s.lineCount - 1),
-  };
+  return moduleNodeOf(s.uriString, s.lineCount);
 }
 
 function toCore(s: TrailSettled): SettledState {
@@ -125,12 +145,14 @@ function toCore(s: TrailSettled): SettledState {
   };
 }
 
-/** Carries the node's definition range so markers can tint the label. */
-function trailUri(node: TrailNodeInput): vscode.Uri {
+/** Carries the node's definition range so markers can tint the label;
+ *  a planned node signals its dim label through the fragment instead. */
+function trailUri(node: TrailNodeInput, planned = false): vscode.Uri {
   return vscode.Uri.from({
     scheme: 'sightread-trail',
     path: `/${node.line}-${node.endLine}`,
     query: node.uriString,
+    fragment: planned ? 'planned' : undefined,
   });
 }
 
@@ -180,6 +202,7 @@ export class TrailViewFeature
       vscode.window.registerFileDecorationProvider(this),
       this.repo.onDidChange(() => this.decoEmitter.fire(undefined)),
       vscode.window.onDidChangeTextEditorSelection((e) => this.onRawSelection(e)),
+      this.view.onDidChangeSelection(() => this.refreshHeader()),
     );
     void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', false);
   }
@@ -252,8 +275,15 @@ export class TrailViewFeature
     // arriving inside a known node keeps the view following the reader
     const here = this.graph.nodeAt(curr.uriString, curr.line);
     if (here) {
+      const wasPlanned = here.planned;
       this.graph.touch(here.key);
-      void this.revealNode(here.key);
+      if (wasPlanned) {
+        // arriving by a view click converts the node — repaint now, don't
+        // wait for a future edge to fire the tree
+        this.fireSoon(here.key);
+      } else {
+        void this.revealNode(here.key);
+      }
     }
     if (!prev) {
       await this.tryRawDrillIn(curr, gen);
@@ -445,7 +475,7 @@ export class TrailViewFeature
 
   setPaused(paused: boolean): void {
     this.paused = paused;
-    this.view.description = paused ? 'paused' : undefined;
+    this.refreshHeader();
     void vscode.commands.executeCommand('setContext', 'sightread.trailPaused', paused);
     if (paused) {
       this.pending = [];
@@ -456,7 +486,101 @@ export class TrailViewFeature
     this.generation++;
     this.graph.clear();
     this.pendingReveal = undefined;
+    this.refreshHeader();
     this.fireSoon();
+  }
+
+  /**
+   * Seeds an AI route into the graph, then expands its tree and selects its
+   * first root. Fires the tree refresh directly — the reveals below need the
+   * fresh projection, not one 80ms away.
+   */
+  async applyRoute(hops: RouteHopInput[], label: string): Promise<void> {
+    this.graph.seedRoute(hops, label);
+    this.emitter.fire();
+    this.decoEmitter.fire(undefined);
+    await this.expandRoute(hops);
+    this.refreshHeader(`Route: ${label}`);
+  }
+
+  /** Removes all still-planned route elements and their badges. */
+  clearRoutes(): void {
+    this.graph.clearPlanned();
+    this.refreshHeader();
+    this.fireSoon();
+  }
+
+  /** The tree path of a hop's element: along calledFrom links, roots resolved
+   *  against the live projection (a hop may sit under walked callers). */
+  private hopPath(hops: RouteHopInput[], i: number, guard: Set<number>): string[] {
+    const from = hops[i].calledFrom;
+    if (from === undefined || from === i || guard.has(i) || !hops[from]) {
+      return this.pathTo(hops[i].node.key) ?? [];
+    }
+    guard.add(i);
+    return [...this.hopPath(hops, from, guard), hops[from].node.key];
+  }
+
+  /** Chunked reveals over the route tree — reveal expands at most 3 levels per call. */
+  private async expandRoute(hops: RouteHopInput[]): Promise<void> {
+    const chainDepth = (i: number): number => {
+      let depth = 0;
+      const guard = new Set<number>([i]);
+      let p = hops[i].calledFrom;
+      while (p !== undefined && !guard.has(p)) {
+        depth++;
+        guard.add(p);
+        p = hops[p].calledFrom;
+      }
+      return depth;
+    };
+    for (let i = 0; i < hops.length; i++) {
+      if (chainDepth(i) % 3 !== 0) {
+        continue;
+      }
+      const el: TrailElement = {
+        key: hops[i].node.key,
+        path: this.hopPath(hops, i, new Set()),
+        recursive: false,
+      };
+      try {
+        await this.view.reveal(el, { expand: 3, select: false, focus: false });
+      } catch (_e) {
+        // best-effort: the tree may have refreshed mid-reveal
+      }
+    }
+    const root = hops.findIndex((h) => h.calledFrom === undefined);
+    if (root >= 0) {
+      const el: TrailElement = {
+        key: hops[root].node.key,
+        path: this.hopPath(hops, root, new Set()),
+        recursive: false,
+      };
+      try {
+        await this.view.reveal(el, { select: true, focus: false });
+      } catch (_e) {
+        // best-effort
+      }
+    }
+  }
+
+  /**
+   * The single header line above the tree (TreeView.message): pause state
+   * plus the selected node's route label. One home for all trail status —
+   * view.description stays unused.
+   */
+  private refreshHeader(routeFallback?: string): void {
+    const key = this.view.selection[0]?.key;
+    const route = key === undefined ? undefined : this.graph.routeOf(key);
+    const parts: string[] = [];
+    if (this.paused) {
+      parts.push('⏸ paused');
+    }
+    const routeText = route ? `Route: ${route.label}` : routeFallback;
+    if (routeText) {
+      parts.push(routeText);
+    }
+    this.view.message = parts.length > 0 ? parts.join(' · ') : undefined;
   }
 
   /** Explicit recall fallback: seed the current function (or module) as a root. */
@@ -488,6 +612,22 @@ export class TrailViewFeature
     this.fireSoon();
   }
 
+  /** Jumps to the line in the caller (the parent node) where this occurrence is called. */
+  goToCallerSite(el?: TrailElement): void {
+    if (!el || el.callsiteLine === undefined || el.path.length === 0) {
+      return;
+    }
+    const caller = this.graph.node(el.path[el.path.length - 1]);
+    if (!caller) {
+      return;
+    }
+    void vscode.commands.executeCommand(
+      'sightread.revealLocation',
+      caller.uriString,
+      el.callsiteLine,
+    );
+  }
+
   getTreeItem(el: TrailElement): vscode.TreeItem {
     const node = this.graph.node(el.key);
     if (!node) {
@@ -504,21 +644,33 @@ export class TrailViewFeature
     );
     item.id = [...el.path, el.key].join('→');
     item.contextValue = 'trailNode';
-    item.iconPath = new vscode.ThemeIcon(KIND_ICONS[node.kind]);
-    const callers = this.graph.inDegree(el.key);
+    // dim follows the NODE alone: clicking an item converts it and must
+    // light it up — keeping an occurrence dim for its unwalked edge reads
+    // as "the click did nothing"
+    const dim = node.planned;
+    item.iconPath = dim
+      ? new vscode.ThemeIcon(KIND_ICONS[node.kind], new vscode.ThemeColor('disabledForeground'))
+      : new vscode.ThemeIcon(KIND_ICONS[node.kind]);
+    // description = ★ (the route's core hops) + ↻ + the call site in the
+    // caller — the one location a click cannot reach (clicking goes to the
+    // definition), so it must be visible here
     const parts: string[] = [];
+    if (node.routeCore) {
+      parts.push('★');
+    }
     if (el.recursive) {
       parts.push('↻');
     }
-    if (callers >= 2) {
-      parts.push(`↗ ${callers} callers`);
+    if (el.callsiteLine !== undefined) {
+      parts.push(`↙ line ${el.callsiteLine + 1}`);
     }
     item.description = parts.join(' · ');
-    item.resourceUri = trailUri(node); // markers tint the label (importance is human judgment)
+    item.resourceUri = trailUri(node, dim); // markers tint the label (importance is human judgment)
     const rel = vscode.workspace.asRelativePath(vscode.Uri.parse(node.uriString), false);
     item.tooltip =
       `${rel}:${node.line + 1}` +
-      (el.callsiteLine !== undefined ? `\ncalled at line ${el.callsiteLine + 1}` : '') +
+      (node.routeNote ? `\nroute${node.routeCore ? ' ★' : ''}: ${node.routeNote}` : '') +
+      (dim ? '\nplanned — not visited yet' : '') +
       (el.recursive ? '\nrecursive — already on this path' : '');
     item.command = {
       command: 'sightread.revealLocation',
@@ -540,7 +692,7 @@ export class TrailViewFeature
       key: c.node.key,
       path,
       recursive: path.includes(c.node.key),
-      callsiteLine: c.callsiteLine,
+      callsiteLine: c.callsiteLine === UNKNOWN_CALLSITE ? undefined : c.callsiteLine,
     }));
   }
 
@@ -559,6 +711,10 @@ export class TrailViewFeature
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     if (uri.scheme !== 'sightread-trail') {
       return undefined;
+    }
+    if (uri.fragment === 'planned') {
+      // planned stays dim even over a marker; the tint returns on conversion
+      return { color: new vscode.ThemeColor('disabledForeground') };
     }
     const range = /^\/(\d+)-(\d+)$/.exec(uri.path);
     const marker = range
@@ -611,6 +767,10 @@ export function registerTrailCommands(
     vscode.commands.registerCommand('sightread.trailResume', () => trail.setPaused(false)),
     vscode.commands.registerCommand('sightread.trailRemove', (el?: TrailElement) =>
       trail.removeElement(el),
+    ),
+    vscode.commands.registerCommand('sightread.routeClear', () => trail.clearRoutes()),
+    vscode.commands.registerCommand('sightread.trailGoToCaller', (el?: TrailElement) =>
+      trail.goToCallerSite(el),
     ),
   );
 }

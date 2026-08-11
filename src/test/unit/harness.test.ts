@@ -22,6 +22,27 @@ suite('harness: buildInvocation', () => {
   });
 });
 
+suite('harness: explore invocation', () => {
+  test('buildInvocation picks exploreArgs in explore mode and falls back to args', () => {
+    const explore = buildInvocation(BUILTIN_HARNESSES.claude, 'plan it', true);
+    assert.ok(explore.args.includes('Read,Grep,Glob,LS'));
+    assert.ok(!explore.args.includes('1'));
+    const normal = buildInvocation(BUILTIN_HARNESSES.claude, 'plan it');
+    assert.ok(normal.args.includes(''));
+    // a profile without exploreArgs falls back gently
+    const aider = buildInvocation(BUILTIN_HARNESSES.aider, 'plan it', true);
+    assert.ok(aider.args.includes('plan it'));
+  });
+
+  test('claude, codex and opencode declare exploreArgs; the rest do not', () => {
+    const capable = Object.entries(BUILTIN_HARNESSES)
+      .filter(([, p]) => p.exploreArgs !== undefined)
+      .map(([name]) => name)
+      .sort();
+    assert.deepStrictEqual(capable, ['claude', 'codex', 'opencode']);
+  });
+});
+
 suite('harness: resolveHarness', () => {
   test('finds builtins by name; unknown names resolve to undefined', () => {
     assert.strictEqual(resolveHarness('claude', {})?.profile.command, 'claude');

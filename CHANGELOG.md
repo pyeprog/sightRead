@@ -2,6 +2,12 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [Unreleased]
+
+- **AI reading routes (new)** — two commands lay AI-planned routes onto the Trail view, driven by the same harness as AI Interpret but in a read-only exploration mode. `SightRead: Plan Reading Route (AI)`: type a reading goal; the agent explores the repository and seeds the route as a dim tree — the entry on top, ★ marking the hops that actually implement the goal, the AI's why-note on hover, the route's goal shown above the tree. `SightRead: Trace Entries to Current Code (AI)`: the reverse — every entry that reaches the code under the cursor, as chains converging on it (★ marks the entries). Planned hops light up as you read them (clicking a hop counts); real jumps confirm the planned edges and correct their call-site lines. Routes coexist; `SightRead: Clear Routes` removes what is still planned. Exploration is builtin for `claude`, `codex` and `opencode` — other harnesses report unsupported, custom profiles enable it by declaring `exploreArgs`; prompts are customizable via `sightread.guide.promptTemplate.route` / `.trace`. Raw responses and every dropped hop are logged to the "SightRead" output channel.
+- **Trail: call sites are visible** — every child node shows the line in its caller where it is called (`↙ line 88`, one per occurrence), and right-click `Go to Caller Site` jumps there — the one location a click could not reach. The `↗ n callers` badge is gone (open the definition and check references instead), and the paused indicator moved from the view title into the header line above the tree.
+- **AI progress shows the typical duration, without jitter** — the progress notification reads `typically ~45s · limit 180s · elapsed 12s`: the typical figure is the median of the last 10 successful runs per harness and unit (an empirical prior before the first run), and the growing counter sits at the end so the line no longer re-wraps as the digits grow.
+
 ## [1.6.3] — 2026-08-09
 
 - **Segment detail text names the dataflow** — the condensed token of an assignment line now shows the call that produced the value (`related=_expand(...)`) instead of a bare `related=..` whenever the right-hand side has one. Keyword pseudo-calls (`if (…)`), operands fed into an operator (`total / len(xs)`) and conditional expressions don't count as the producing call. A segment that both assigns and calls now reads — and is iconed — as an assignment.

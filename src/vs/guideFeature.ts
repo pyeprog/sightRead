@@ -20,8 +20,9 @@ import type { GuideNode } from './markersView';
 import { InterpretTarget, resolveInterpretTarget } from './symbols';
 
 const RUN_TIMEOUT_MS = 180_000;
-/** globalState key: harness/unit → recent successful run durations (ms) */
-const DURATIONS_KEY = 'sightread.guide.runDurations';
+/** globalState key: `${harness}/${unit}` → recent successful run durations (ms);
+ *  shared with routeFeature, whose units are 'route' and 'trace' */
+export const DURATIONS_KEY = 'sightread.guide.runDurations';
 /** argv-size / token-cost guards for the one-shot prompt */
 const MAX_UNIT_LINES: Record<InterpretUnit, number> = { function: 1200, class: 1200, file: 2000 };
 const MAX_HEADER_LINES = 40;
@@ -70,7 +71,7 @@ export async function collectSubjectContext(
  * auto probed everything and found nothing; a named harness whose command is
  * not on PATH; a name that is neither builtin nor a customHarnesses key.
  */
-async function showHarnessNotFound(cfg: vscode.WorkspaceConfiguration): Promise<void> {
+export async function showHarnessNotFound(cfg: vscode.WorkspaceConfiguration): Promise<void> {
   const name = cfg.get<string>('guide.harness', 'auto');
   const custom = cfg.get<Record<string, HarnessProfile>>('guide.customHarnesses', {});
   let message: string;
@@ -203,14 +204,15 @@ export class GuideFeature implements vscode.Disposable {
         (progress, token) => {
           const abort = new AbortController();
           token.onCancellationRequested(() => abort.abort());
-          // the harness is silent until it finishes — an elapsed/limit tick is
-          // the "still alive" signal; the typical figure says whether the
-          // current wait is normal
+          // the harness is silent until it finishes — an elapsed tick is the
+          // "still alive" signal; the typical figure says whether the current
+          // wait is normal. Constant text first, the growing counter last —
+          // a changing prefix makes the notification re-wrap and jitter.
           const limitS = Math.round(RUN_TIMEOUT_MS / 1000);
-          const typicalNote = ` (typically ~${typicalS}s)`;
+          const prefix = `typically ~${typicalS}s · limit ${limitS}s · elapsed `;
           const ticker = setInterval(() => {
             const elapsedS = Math.round((Date.now() - startMs) / 1000);
-            progress.report({ message: `${elapsedS}s / ${limitS}s${typicalNote}` });
+            progress.report({ message: `${prefix}${elapsedS}s` });
           }, 1000);
           return runner
             .run({ prompt, cwd, timeoutMs: RUN_TIMEOUT_MS, signal: abort.signal })

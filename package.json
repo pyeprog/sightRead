@@ -242,6 +242,29 @@
         "title": "Remove from Trail",
         "category": "SightRead",
         "icon": "$(trash)"
+      },
+      {
+        "command": "sightread.planRoute",
+        "title": "Plan Reading Route (AI)",
+        "category": "SightRead",
+        "icon": "$(map)"
+      },
+      {
+        "command": "sightread.traceEntries",
+        "title": "Trace Entries to Current Code (AI)",
+        "category": "SightRead",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "sightread.routeClear",
+        "title": "Clear Routes",
+        "category": "SightRead",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "sightread.trailGoToCaller",
+        "title": "Go to Caller Site",
+        "category": "SightRead"
       }
     ],
     "keybindings": [
@@ -321,7 +344,7 @@
       },
       {
         "view": "sightread.trailView",
-        "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
+        "contents": "Trail records structural navigation while this view is open: jump to definitions and references between functions, and the call structure appears here as you read — a parent calls its children.\nNothing is recorded while the view is hidden (the last few jumps are replayed when it opens).\n[Pin Current Function](command:sightread.trailPin)\nOr let AI lay out a route — type a reading goal, or trace the code under the cursor back to its entries. Planned hops appear dim and light up as you actually read them.\n[Plan Reading Route (AI)](command:sightread.planRoute)\nClick a node to jump to its definition; right-click to remove a branch. The trail is discarded when the window closes."
       }
     ],
     "walkthroughs": [
@@ -458,6 +481,10 @@
           "when": "false"
         },
         {
+          "command": "sightread.trailGoToCaller",
+          "when": "false"
+        },
+        {
           "command": "sightread.trailPause",
           "when": "!sightread.trailPaused"
         },
@@ -536,6 +563,16 @@
           "command": "sightread.trailClear",
           "when": "view == sightread.trailView",
           "group": "navigation@3"
+        },
+        {
+          "command": "sightread.planRoute",
+          "when": "view == sightread.trailView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "sightread.routeClear",
+          "when": "view == sightread.trailView",
+          "group": "1_route@1"
         }
       ],
       "view/item/context": [
@@ -583,6 +620,11 @@
           "command": "sightread.trailRemove",
           "when": "view == sightread.trailView && viewItem == trailNode",
           "group": "inline"
+        },
+        {
+          "command": "sightread.trailGoToCaller",
+          "when": "view == sightread.trailView && viewItem == trailNode",
+          "group": "1_nav@1"
         }
       ],
       "editor/context": [
@@ -595,6 +637,10 @@
         {
           "command": "sightread.interpretFunction",
           "group": "0_ai@1"
+        },
+        {
+          "command": "sightread.traceEntries",
+          "group": "0_ai@2"
         },
         {
           "command": "sightread.markFavorite",
@@ -775,7 +821,7 @@
         "sightread.guide.customHarnesses": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
+          "markdownDescription": "Extra harness profiles, or wholesale replacements of builtin ones (same name wins). Each value is an object with:\n- `command` — the executable\n- `args` — argument array; `${prompt}` is replaced with the full prompt (omit it to pipe the prompt via stdin)\n- `exploreArgs` — argument array for read-only repository exploration; declaring it enables route planning *(optional)*\n- `env` — extra environment variables *(optional)*\n- `resultField` — field of a JSON-envelope stdout holding the final text *(optional; omit for CLIs that print the plain answer)*\n- `errorField` — envelope field that is `true` on failure *(optional)*\n\nExample:\n```json\n{ \"mytool\": { \"command\": \"mytool\", \"args\": [\"run\", \"${prompt}\"] } }\n```"
         },
         "sightread.guide.language": {
           "type": "string",
@@ -799,6 +845,18 @@
           "default": "",
           "editPresentation": "multilineText",
           "markdownDescription": "Custom reading instructions when interpreting a whole **file**.\n\nEmpty = builtin default: one step per top-level block, role-tagged (config / types / core / wiring / util / exports), notes give the block's reason to exist.\n\nSame placeholders as `#sightread.guide.promptTemplate.function#` — `${subjectName}` / `${subjectText}` are the file's basename and source.\n\nThe JSON output contract is appended by SightRead and always wins on conflict."
+        },
+        "sightread.guide.promptTemplate.route": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Custom exploration instructions when **planning a reading route** from a typed goal.\n\nEmpty = builtin default: start at an entry, follow the call/dependency chain, attach only critical side references, at most 12 hops.\n\nPlaceholder: `${goal}` — the goal typed into the input box.\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
+        },
+        "sightread.guide.promptTemplate.trace": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Custom exploration instructions when **tracing entries** to the code under the cursor.\n\nEmpty = builtin default: find at most 3 relevant entry points and route each chain down to the queried code.\n\nPlaceholders: `${filePath}`, `${subjectName}`, `${startLine}`, `${endLine}` — the queried code's location.\n\nThe JSON output contract is appended by SightRead after the template and always wins on conflict."
         },
         "sightread.variableTint.enabled": {
           "type": "boolean",
