@@ -60,7 +60,7 @@
 
 - 唯一来源是自动（手动划段因"划完即读完"悖论被废弃）。信号三个：
   1. **空行**分隔；
-  2. **顶层块**（if/else、循环、try/catch、内部闭包——由缩进回落 + 续行关键字识别，语言无关）自成一段，块长 < 3 行的并入邻段；
+  2. **顶层块**（if/else、循环、try/catch、内部闭包——由缩进回落 + 续行关键字识别）自成一段，块长 < 3 行的并入邻段；
   3. **注释/装饰器行绑定下一段**。
 - **递归树结构**（2026-07-07 第二版）：块段落的内部（更深缩进的每一段连续区）递归切段成子节点，根即函数，深度上限 5。call/assignment/flow 类段落不向下递归（多行调用的参数不是结构）。
 - **结构化命名**，注释内容永不作为段落名：
@@ -72,6 +72,8 @@
   - 流控制：`return ...` / `raise ...`
   - 均无法识别时退化为首行代码文本（截断 60 字符）。
 - 垃圾代码退化为"整个函数一段"，无害。
+- **按语言分派**（2026-08-11）：语言相关判定（续行/结构关键字/定义/命名链/签名边界）按语言各写一组函数——`core/lang/` 每语言一个模块实现 `LanguageSyntax` 四件套（isContinuationLine/isKeywordLead/classify/findBodyStart），`syntaxFor(languageId)` 整组分派。专组覆盖 TS/JS（含 react 方言）、Python、Go、Rust、Java、C#、C/C++（同组）、Ruby、PHP、Swift、Kotlin，未知语言退 generic 混合组（即原语言无关启发式，行为不变）；新语言加模块 + 注册 id，不改算法。专组顺带修掉混合表的跨语言误判（JS 的 `match = …` 被认成 switch、`end = …` 被 Ruby 续行词粘段等），并携带各语言的语义映射：Go 的 select、Kotlin 的 when、Ruby 的 case 归 switch；C# 的 using/lock、Java 的 synchronized、Swift 的 defer 归 with；Swift 的 do/catch、Ruby 的 begin/rescue/ensure 归 try；Ruby 的 unless/until、Swift 的 guard/repeat 各归 branch/loop。Python 的 `match`/`case` 与 TS 的 `using` 是软关键字，用 lookahead 排除赋值/调用形态；Ruby 无签名开口符，findBodyStart 认"括号闭合的首行"。语言中立的表达式工具（statementSummary/condenseHeader/签名深度扫描）共享在 `lang/expression.ts`。
+- **函数体提取**（`extractBody`）：签名边界归语言组（`findBodyStart`）——逐行累计括号深度（字符串遮蔽后），brace 语言认"行尾 `{` 且深度回到 1"，colon 语言认"行尾 `:` 且深度 0"，generic 先到先得——TS 解构参数 + inline 类型字面量的多行签名因此不再被切进函数体；扫描窗口 8 行，括号未闭合时顺延。尾部闭合行裁剪语言无关，留在 `segmentation.ts`。
 - 纯函数实现（`core/segmentation.ts`），按文档版本缓存。
 - 消费方：聚光灯二/三档、`Go to Segment` QuickPick、侧边栏 **Segments 视图**（随光标显示当前函数的段落树，按 kind 显示彩色图标：branch=黄/loop=绿/try=红/definition=紫/assignment=橙/call=蓝；不显示行号）。
 - **Segments 视图随光标联动**（2026-07-09）：光标移动时 `TreeView.reveal` 选中光标所在最深段（`focus: false` 不抢焦点；树处于骨架折叠的收起态时跳过，避免 reveal 展开祖先并经 syncCodeFold 反向展开刚折叠的代码）。聚光灯开启时视图同步亮暗：lit 集合之外的段以 `FileDecorationProvider`（自定义 scheme `sightread-seg` 的 resourceUri）染 `list.deemphasizedForeground` 并置灰图标，光标段的 label 用 `TreeItemLabel.highlights` 强调——树条目无法比默认前景更亮，"点亮"只能靠压暗其余部分表达，与编辑器同构。
@@ -173,7 +175,10 @@ AI 不代读，只提供信息增益。两个形态——**解读**（局部："
 ```
 src/
   core/            纯逻辑，零 vscode 依赖，单元测试覆盖
-    segmentation.ts   切段算法 + 函数体提取
+    segmentation.ts   切段算法 + 函数体提取（结构骨架，语言判定经 LanguageSyntax 委托）
+    lang/             每语言一组语法函数实现 LanguageSyntax：tsJs/python/go/rust/java/
+                      csharp/cCpp/ruby/php/swift/kotlin + generic 兜底，
+                      index.syntaxFor 按 languageId 整组分派，expression 是中立表达式工具
     markers.ts        荧光笔数据操作（编辑平移/相交删除/替换插入）
     focus.ts          焦点集合计算、行区间代数（merge/subtract/contain）
     enclosing.ts      "当前函数"选择（显式命令取最内层 vs 聚光灯的头行让位）

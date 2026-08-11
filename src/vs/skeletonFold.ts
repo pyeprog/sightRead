@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { syntaxFor } from '../core/lang';
 import { extractBody } from '../core/segmentation';
 import { DocSegmentNode, SegmentCache } from './segmentCache';
 import { FunctionInfo, findFunctionAtCursor } from './symbols';
@@ -44,7 +45,7 @@ function bodyStartLine(doc: vscode.TextDocument, fn: FunctionInfo): number {
   for (let i = fn.range.start.line; i <= lastLine; i++) {
     lines.push(doc.lineAt(i).text);
   }
-  const body = extractBody(lines);
+  const body = extractBody(lines, syntaxFor(doc.languageId));
   return Math.min(fn.range.start.line + body.offset, lastLine);
 }
 
