@@ -98,7 +98,7 @@ const DEFINITION_RE =
 // `: type` annotation is tolerated; a function-typed one contains `=>` itself
 // and falls back to the assignment path (accepted heuristic miss).
 const FUNCTION_ASSIGN_RE =
-  /^(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?::[^=]+?)?=\s*(?:async\s+)?(function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/;
+  /^(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?::[^=]+?)?=\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/;
 
 const FLOW_KEYWORDS = new Set([
   'return',
@@ -387,12 +387,11 @@ function classify(top: string[], opts: SegmentationOptions): Summary {
   // Only a unit the binding owns is a definition: alone, or followed by
   // nothing but closers/continuations (the block form's `};`). A one-line
   // arrow merged into a statement group must not claim the group's name.
+  // Named keyword-first like every other definition (`def foo`, `class Bar`) —
+  // the arrow syntax itself is the code's business, not the tree's.
   const fnAssign = first.match(FUNCTION_ASSIGN_RE);
   if (fnAssign && top.slice(1).every((l) => CONTINUATION_RE.test(l))) {
-    return {
-      kind: 'definition',
-      name: `${fnAssign[1]} = ${fnAssign[2].startsWith('function') ? 'function' : '() =>'}`,
-    };
+    return { kind: 'definition', name: `function ${shortenPath(fnAssign[1])}` };
   }
   if (kw && FLOW_KEYWORDS.has(kw)) {
     const bare = first.replace(/[;\s]+$/, '') === kw;
