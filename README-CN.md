@@ -65,10 +65,10 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 - 🧩 **自动分代码块** —— 按空行 + 关键词把函数切成**递归结构**，方便在segment窗口展示函数大结构，点击可以跳转到相应代码块。节点旁还会以灰色小字显示压缩后的条件/表达式（悬停可看完整首行）。Segments 面板会跟随光标：光标所在的段自动选中；聚光灯开启时，无关的段在面板里也会像编辑器里一样压暗。
 - 🚪 **入口点** —— 侧边栏视图，列出一个文件的控制流可以从外部进入的所有"入口"，让你从入口开始顺着引用往下读，而不是从第一行开始读。每个顶层符号按引用位置分类：被其他文件引用 → 入口；只在文件内被引用 → 隐藏；找不到任何引用 → 弱化显示的"疑似"入口（`activate` 这类框架钩子、路由 handler——或者死代码）。编辑器 gutter 里以雪佛龙（»）标出入口行。
 - 🧭 **Trail（阅读轨迹）** —— 侧边栏视图，在它打开期间把你的跳转变成调用结构图：跳到定义，被调函数出现在出发函数之下；跳到引用，调用方成为父节点。不做全项目扫描——只记录你真实走过的结构性跳转（每一条都经 definition provider 验证），结构随阅读自然显现。子节点按调用位置排序，并显示它在调用方里被调用的行（`↙ line 88`，右键 `Go to Caller Site` 一步跳达）；函数体内有荧光笔标记的节点以标记色染色。轨迹只存在于内存中，关窗即弃。
-- 🤖 **AI 辅助阅读** —— 插件的可选 AI 层，一以贯之的哲学：只给路标，不翻译代码。三条命令都驱动你已有的 coding-agent CLI（`claude`(claude code)、`codex`(codex cli)、`opencode`、`pi`、`cursor-agent`、`aider`、`agy`——自动探测，可配置自定义命令），headless 运行，需要你自己事先登录或配置 API key。
+- 🤖 **AI 辅助阅读** —— 插件的可选 AI 层，一以贯之的哲学：只给路标，不翻译代码。三条命令都驱动你已有的 coding-agent CLI（`claude`(claude code)、`codex`(codex cli)、`opencode`、`pi`、`cursor-agent`、`devin`、`aider`、`agy`——自动探测，可配置自定义命令），headless 运行，需要你自己事先登录或配置 API key。
   - `SightRead: Interpret Current (AI)` —— 光标处的代码——函数、类、整个文件——被**就地**标注为按角色着色的步骤：主体在哪里，哪些是准备/兜底/特例处理，每个核心实体*为什么*存在。解读结果挂在 Markers 视图下。
   - `SightRead: Plan Reading Route (AI)` —— 输入一个阅读目标（"X 是怎么实现的？"），agent 只读探索仓库，把一条**规划路线**种进 Trail 视图：从入口起步的暗色树，★ 标出真正实现该目标的那几跳，悬停可看 AI 的"为什么路过这里"。规划的跳会随着你真正读到而点亮；真实跳转会把规划的边转正。多条路线并存——你正在读的路线的目标显示在树顶。
-  - `SightRead: Trace Entries to Current Code (AI)` —— 反过来：列出所有能到达光标处代码的入口，铺成汇聚于它的链（★ 标在入口上）。路线命令需要 harness 支持只读探索——`claude` / `codex` / `opencode` 内置，自定义 profile 可声明 `exploreArgs`；原始回复与被丢弃的跳都记录在 "SightRead" 输出频道。
+  - `SightRead: Trace Entries to Current Code (AI)` —— 反过来：列出所有能到达光标处代码的入口，铺成汇聚于它的链（★ 标在入口上）。路线命令需要 harness 支持只读探索——`claude` / `codex` / `opencode` / `devin` / `agy` 内置，自定义 profile 可声明 `exploreArgs`；原始回复与被丢弃的跳都记录在 "SightRead" 输出频道。
 - 🗂️ **侧边栏** —— SightRead 活动栏容器包含四个视图：**Entry Points**（从哪里开始读这个文件）、**Segments**（当前函数的段落树）、**Markers**（工作区内所有荧光标记与 AI 解读）和 **Trail**（你走过的调用结构，以及 AI 规划的路线）。四个视图都会跟随光标。它们合在一起天然覆盖了 Outline 的功能——比起 Outline 不加筛选地列举所有 symbol，SightRead 能更好地向你展示当前阅读代码的真正结构。
 
 
@@ -122,8 +122,9 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 | `sightread.entries.iconColor` | `#8C8C8C` | 雪佛龙颜色；疑似入口以降低的透明度使用同色 |
 | `sightread.marker.favoriteColor` | `yellow` | `Mark Selection (Favorite Color)` 使用的颜色 |
 | `sightread.marker.notePosition` | `lineEnd` | 标记备注显示在行首还是行尾 |
-| `sightread.guide.harness` | `auto` | AI 解读与路线规划驱动哪个 coding-agent CLI；`auto` 按 `claude` → `codex` → `opencode` → `pi` → `cursor` → `aider` → `agy` 顺序探测 |
+| `sightread.guide.harness` | `auto` | AI 解读与路线规划驱动哪个 coding-agent CLI；`auto` 按 `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` 顺序探测 |
 | `sightread.guide.customHarnesses` | `{}` | 添加自建 harness 配置，或按名字覆盖内置的；声明 `exploreArgs` 即可启用路线规划 |
+| `sightread.guide.model` | *(空)* | 以 `--model` 传给每个 harness 的模型；值的词表由所选 CLI 决定；空 = 该 CLI 的默认模型 |
 | `sightread.guide.language` | *(空)* | AI 备注与概述的语言；空 = 英语 |
 | `sightread.guide.promptTemplate.function` / `.class` / `.file` / `.route` / `.trace` | *(空)* | 按解读单位/路线场景自定义指令；JSON 输出契约始终由 SightRead 追加 |
 

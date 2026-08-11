@@ -67,6 +67,7 @@
   - 分支：`if ...` / `if ... else ...` / `if ... elif{3} ... else ...`（关键字取语言实际所用，如 JS 的 `else if`）
   - 循环 `for ...`/`while ...`，上下文 `with ...`，异常 `try ... except ... finally ...`，分派 `switch ...`/`match ...`
   - 定义：`def foo` / `class Bar` / `function baz`（语言关键字 + 名字）
+  - 函数值赋值（2026-08-11）：`const f = () => {}` / `f = function (…)` 归 definition 而非 assignment——命名与其他定义同族"关键字 + 名字"：`function f`（左值路径经 shortenPath 去 this/self），箭头语法本身是代码的事不是树的事；并随 definition 参与递归切段（此前按赋值段处理导致体内不再切分）。仅当绑定独占单元（单独一段，或首行后只剩闭合行）才成立——单行箭头混进语句组不抢组名；函数类型标注的左值（标注自带 `=>`）识别不了，退回赋值段，接受。
   - 赋值段（2026-08-09 第二版，数据流边）：右值含调用时 `related=_expand(...)`——产物与产生它的操作同显，流水线函数因此可读；右值无调用（字面量、多行右值、三元条件）退回 `a=..`。每行一个 token，最多 4 个，超出加 `…`。调用路径去 `self`/`this` 并只留最后两段（`vscode.workspace.textDocuments.find` → `textDocuments.find`）；运算符后面的调用视为操作数不取（`total / len(xs)` → `avg=..`）。段内含赋值即为 assignment kind（图标不随右值出现调用漂移）。
   - 调用段：`shutil.rmtree(...)`，无参写 `path.unlink()`（同样去 self/裁路径）
   - 流控制：`return ...` / `raise ...`
@@ -146,8 +147,9 @@ AI 不代读，只提供信息增益。两个形态——**解读**（局部："
 
 **3.8.1 agent harness（机制）**
 
-- 复用用户已有的 coding-agent CLI，headless 单发运行（订阅即用，不经手 API key）。`HarnessProfile { command, args（${prompt} 占位，缺省走 stdin）, exploreArgs?, env?, resultField?, errorField? }`；内置 claude / codex / opencode / pi / cursor（`cursor-agent` 别名探测，主名 `agent` 太泛）/ aider / agy。`sightread.guide.harness = auto` 按市场份额序探测（Cursor 宿主提前 cursor）；`customHarnesses` 同名整体覆盖、不做字段合并。
-- 两档 argv：**解读档**（无工具、单轮——代码随 prompt 附上）与**探索档 `exploreArgs`**（只读工具、多轮，路线专用；claude/codex/opencode 内置，未声明探索档的 harness 对路线明确报"不支持"）。
+- 复用用户已有的 coding-agent CLI，headless 单发运行（订阅即用，不经手 API key）。`HarnessProfile { command, args（${prompt} 占位，缺省走 stdin）, exploreArgs?, env?, resultField?, errorField? }`；内置 claude / codex / opencode / pi / cursor（`cursor-agent` 别名探测，主名 `agent` 太泛）/ devin（Cognition 官方 CLI，Windsurf 血统；Windsurf 本体无 headless CLI）/ aider / agy（即 Antigravity）。`sightread.guide.harness = auto` 按市场份额序探测（Cursor 宿主提前 cursor）；`customHarnesses` 同名整体覆盖、不做字段合并。
+- 两档 argv：**解读档**（无工具、单轮——代码随 prompt 附上）与**探索档 `exploreArgs`**（只读工具、多轮，路线专用；claude/codex/opencode/devin/agy 内置，未声明探索档的 harness 对路线明确报"不支持"）。
+- `sightread.guide.model`：统一以 `--model <value>` 追加到两档 argv（八家 builtin 共享该 flag；值的词表属于所选 CLI），留空 = 各 CLI 默认模型；进度条 title 显示 `· <model>` 或 `(default model)`，让"没设"可见。
 - prompt = 模板（按单位/场景，settings 可换）+ **恒定 JSON 契约收尾**——永远追加在最后、声明冲突时获胜，解析器只依赖契约。响应解析带容错阶梯（裸 JSON → ```json 围栏 → 首尾大括号截取）。
 - 时长反馈：进度条 1s 秒表 `typically ~Ns · limit Ns · elapsed Ns`（恒定前缀 + 末尾计数——变化的前缀会让通知反复重排换行）；typical = 每个 `harness/单位` 键最近 10 次**成功**运行的中位数（globalState，超时与取消不计），首跑用经验先验（解读 60s / 探索 120s）。
 - 可观察性：**"SightRead" Output channel** 记录每次路线运行的原始回复 + 每个被丢弃/落根/退行号 hop 的原因——树长歪时能区分"AI 答成这样"与"好答案被解析掰坏"。

@@ -64,6 +64,15 @@ export const BUILTIN_HARNESSES: Record<string, HarnessProfile> = {
     resultField: 'result',
     errorField: 'is_error',
   },
+  devin: {
+    // Windsurf's lineage: Cognition's official CLI (Windsurf → Devin Desktop).
+    // Headless -p cannot show the workspace-trust prompt — disable it explicitly.
+    // permission-mode 'plan' = read-only tools (grep/glob/read); doc-level
+    // verified against docs.devin.ai (2026-08), not yet machine-tested.
+    command: 'devin',
+    args: ['-p', PROMPT_PLACEHOLDER, '--permission-mode', 'plan', '--respect-workspace-trust', 'false'],
+    exploreArgs: ['-p', PROMPT_PLACEHOLDER, '--permission-mode', 'plan', '--respect-workspace-trust', 'false'],
+  },
   aider: {
     command: 'aider',
     args: [
@@ -77,12 +86,17 @@ export const BUILTIN_HARNESSES: Record<string, HarnessProfile> = {
     // Google-OAuth only (no injectable key); --output-format needs agy >= 1.1.1
     command: 'agy',
     args: ['-p', PROMPT_PLACEHOLDER, '--output-format', 'json'],
+    // headless soft-denies approval-needing tools (writes/commands) while read
+    // tools stay — read-only by default; agy's own --print-timeout (default 5m)
+    // is pinned to match the 300s route bound. Doc-level verified (2026-08),
+    // not yet machine-tested.
+    exploreArgs: ['-p', PROMPT_PLACEHOLDER, '--output-format', 'json', '--print-timeout', '5m'],
     resultField: 'response',
   },
 };
 
-/** auto-detection priority — market share as of 2026-07 */
-export const DETECTION_ORDER = ['claude', 'codex', 'opencode', 'pi', 'cursor', 'aider', 'agy'];
+/** auto-detection priority — market share as of 2026-08 */
+export const DETECTION_ORDER = ['claude', 'codex', 'opencode', 'pi', 'cursor', 'devin', 'aider', 'agy'];
 
 function isValidProfile(p: unknown): p is HarnessProfile {
   if (typeof p !== 'object' || p === null) {
@@ -117,14 +131,24 @@ export function resolveHarness(
  * Expands ${prompt} in argv; with no placeholder the prompt goes to stdin.
  * `explore` picks the profile's exploreArgs when declared (capability gating
  * lives in HarnessRunner.supportsExplore — this only falls back gently).
+ * `model` is appended as `--model <value>` — the one flag every builtin CLI
+ * shares — kept ahead of a trailing stdin marker so flags precede the
+ * positional (codex).
  */
 export function buildInvocation(
   profile: HarnessProfile,
   prompt: string,
   explore = false,
+  model?: string,
 ): { args: string[]; stdinPrompt?: string } {
   let substituted = false;
-  const argv = explore && profile.exploreArgs ? profile.exploreArgs : profile.args;
+  let argv = explore && profile.exploreArgs ? profile.exploreArgs : profile.args;
+  if (model) {
+    argv =
+      argv[argv.length - 1] === '-'
+        ? [...argv.slice(0, -1), '--model', model, '-']
+        : [...argv, '--model', model];
+  }
   const args = argv.map((a) => {
     if (a.includes(PROMPT_PLACEHOLDER)) {
       substituted = true;

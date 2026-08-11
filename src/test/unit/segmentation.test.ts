@@ -96,6 +96,30 @@ suite('segmentation: structural naming', () => {
     assert.strictEqual(c[0].kind, 'definition');
   });
 
+  test('a function value bound to a name is a definition, and its body recurses', () => {
+    const t = tree(
+      'const handle = (x) => {',
+      '  if (x) {',
+      '    doA();',
+      '    doB();',
+      '  }',
+      '};',
+    );
+    assert.strictEqual(t[0].kind, 'definition');
+    assert.strictEqual(t[0].name, 'function handle');
+    assert.strictEqual(t[0].children[0].name, 'if');
+    const f = tree('const f = function (a) {', '  return a;', '  // pad', '};');
+    assert.strictEqual(f[0].name, 'function f');
+    // a lone one-liner is a definition too; a `this.` binding sheds the prefix
+    const g = tree('this.handler = async (e: Event) => e.stop();');
+    assert.deepStrictEqual([g[0].kind, g[0].name], ['definition', 'function handler']);
+    // ...but merged into a statement group it must not claim the group's name
+    const merged = tree('const g = (x) => x * 2;', 'const y = g(3);');
+    assert.strictEqual(merged[0].kind, 'assignment');
+    // a plain value assignment stays an assignment
+    assert.strictEqual(tree('const x = compute();')[0].kind, 'assignment');
+  });
+
   test('recursion: nested blocks become descendants', () => {
     const t = tree('if (a) {', '  for (const x of xs) {', '    handle(x);', '  }', '}');
     assert.strictEqual(t[0].name, 'if');

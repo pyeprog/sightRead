@@ -34,12 +34,22 @@ suite('harness: explore invocation', () => {
     assert.ok(aider.args.includes('plan it'));
   });
 
-  test('claude, codex and opencode declare exploreArgs; the rest do not', () => {
+  test('a set model is appended as --model, staying ahead of a trailing stdin marker', () => {
+    const claude = buildInvocation(BUILTIN_HARNESSES.claude, 'p', false, 'sonnet');
+    assert.deepStrictEqual(claude.args.slice(-2), ['--model', 'sonnet']);
+    const codex = buildInvocation(BUILTIN_HARNESSES.codex, 'p', false, 'gpt-5');
+    assert.deepStrictEqual(codex.args.slice(-3), ['--model', 'gpt-5', '-']);
+    const explore = buildInvocation(BUILTIN_HARNESSES.claude, 'p', true, 'opus');
+    assert.ok(explore.args.includes('Read,Grep,Glob,LS') && explore.args.includes('opus'));
+    assert.ok(!buildInvocation(BUILTIN_HARNESSES.claude, 'p').args.includes('--model'));
+  });
+
+  test('claude, codex, opencode, devin and agy declare exploreArgs; the rest do not', () => {
     const capable = Object.entries(BUILTIN_HARNESSES)
       .filter(([, p]) => p.exploreArgs !== undefined)
       .map(([name]) => name)
       .sort();
-    assert.deepStrictEqual(capable, ['claude', 'codex', 'opencode']);
+    assert.deepStrictEqual(capable, ['agy', 'claude', 'codex', 'devin', 'opencode']);
   });
 });
 
