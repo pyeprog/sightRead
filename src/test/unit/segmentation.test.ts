@@ -1,5 +1,7 @@
 import * as assert from 'assert';
-import { SegmentNode, extractBody, segmentTree } from '../../core/segmentation';
+import { syntaxFor } from '../../core/lang';
+import { genericSyntax } from '../../core/lang/generic';
+import { DEFAULT_OPTIONS, SegmentNode, extractBody, segmentTree } from '../../core/segmentation';
 
 function tree(...lines: string[]): SegmentNode[] {
   return segmentTree(lines);
@@ -332,5 +334,214 @@ suite('segmentation: extractBody', () => {
   test('single-line symbol has no body', () => {
     const r = extractBody(['const f = () => x;']);
     assert.deepStrictEqual(r.lines, []);
+  });
+
+  test('ts: multi-line destructured params with inline type literal', () => {
+    const r = extractBody(
+      [
+        'function EntryParamsRow({',
+        '  form,',
+        '  params,',
+        '  onChange,',
+        '}: {',
+        '  form: PracticeForm;',
+        '  params?: FormParams;',
+        '  onChange(params: FormParams): void;',
+        '}) {',
+        '  const specs = FORM_PARAM_SPECS[form];',
+        '  if (!specs) return null;',
+        '  return specs;',
+        '}',
+      ],
+      syntaxFor('typescriptreact'),
+    );
+    assert.strictEqual(r.offset, 9);
+    assert.deepStrictEqual(r.lines, [
+      '  const specs = FORM_PARAM_SPECS[form];',
+      '  if (!specs) return null;',
+      '  return specs;',
+    ]);
+  });
+
+  test('ts: single-line destructured params', () => {
+    const r = extractBody(
+      ['function f({ a, b }: { a: X; b: Y }) {', '  body();', '}'],
+      syntaxFor('typescript'),
+    );
+    assert.strictEqual(r.offset, 1);
+    assert.deepStrictEqual(r.lines, ['  body();']);
+  });
+
+  test('python: multi-line signature with annotated params', () => {
+    const r = extractBody(
+      ['def f(', '    a: int,', ') -> dict:', '    return {}'],
+      syntaxFor('python'),
+    );
+    assert.strictEqual(r.offset, 3);
+    assert.deepStrictEqual(r.lines, ['    return {}']);
+  });
+});
+
+suite('segmentation: language dispatch', () => {
+  test('typescript variants map to the ts-js syntax', () => {
+    assert.strictEqual(syntaxFor('typescript'), syntaxFor('javascriptreact'));
+    assert.notStrictEqual(syntaxFor('typescript'), genericSyntax);
+  });
+
+  test('unknown language falls back to generic', () => {
+    assert.strictEqual(syntaxFor('cobol'), genericSyntax);
+  });
+
+  test('js: bare match assignment is assignment, not switch', () => {
+    const t = segmentTree(['match = pattern.exec(s);'], DEFAULT_OPTIONS, syntaxFor('javascript'));
+    assert.strictEqual(t[0].kind, 'assignment');
+    assert.strictEqual(t[0].name, 'match=pattern.exec(...)');
+  });
+
+  test('python: match statement keeps its switch kind', () => {
+    const t = segmentTree(
+      ['match cmd:', '    case 1:', '        a()', '    case 2:', '        b()'],
+      DEFAULT_OPTIONS,
+      syntaxFor('python'),
+    );
+    assert.strictEqual(t[0].kind, 'switch');
+    assert.strictEqual(t[0].name, 'match');
+  });
+
+  test('python: top-level end variable starts its own segment', () => {
+    const t = segmentTree(
+      ['start = lo()', '', 'end = hi()'],
+      DEFAULT_OPTIONS,
+      syntaxFor('python'),
+    );
+    assert.strictEqual(t.length, 2);
+    assert.strictEqual(t[1].name, 'end=hi()');
+  });
+});
+
+suite('segmentation: per-language syntax', () => {
+  test('go: receiver method signature and type definition', () => {
+    const r = extractBody(
+      ['func (s *Server) handle(', '  w http.ResponseWriter,', ') error {', '  s.mu.Lock()', '  return nil', '}'],
+      syntaxFor('go'),
+    );
+    assert.strictEqual(r.offset, 3);
+    const t = segmentTree(
+      ['type Config struct {', '  Name string', '  Port int', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('go'),
+    );
+    assert.strictEqual(t[0].kind, 'definition');
+    assert.strictEqual(t[0].name, 'type Config');
+  });
+
+  test('rust: match is a switch, multi-line fn signature with return type', () => {
+    const t = segmentTree(
+      ['match msg {', '    Msg::A => a(),', '    Msg::B => b(),', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('rust'),
+    );
+    assert.strictEqual(t[0].kind, 'switch');
+    assert.strictEqual(t[0].name, 'match');
+    const r = extractBody(
+      ['fn parse(', '    input: &str,', ') -> Result<(), Error> {', '    body();', '}'],
+      syntaxFor('rust'),
+    );
+    assert.strictEqual(r.offset, 3);
+  });
+
+  test('java: try/catch/finally chain and synchronized block', () => {
+    const t = segmentTree(
+      ['try {', '  a();', '} catch (IOException e) {', '  b();', '} finally {', '  c();', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('java'),
+    );
+    assert.strictEqual(t[0].name, 'try/catch/finally');
+    const s = segmentTree(
+      ['synchronized (lock) {', '  a();', '  b();', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('java'),
+    );
+    assert.strictEqual(s[0].kind, 'with');
+  });
+
+  test('csharp: using block and foreach loop', () => {
+    const u = segmentTree(
+      ['using (var conn = Open()) {', '  conn.Run();', '  conn.Close();', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('csharp'),
+    );
+    assert.strictEqual(u[0].kind, 'with');
+    assert.strictEqual(u[0].name, 'using');
+    const f = segmentTree(
+      ['foreach (var x in xs) {', '  Use(x);', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('csharp'),
+    );
+    assert.strictEqual(f[0].kind, 'loop');
+  });
+
+  test('cpp: else-if chain, c shares the module', () => {
+    const t = segmentTree(
+      ['if (a) {', '  x();', '} else if (b) {', '  y();', '} else {', '  z();', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('cpp'),
+    );
+    assert.strictEqual(t[0].name, 'if/else if/else');
+    assert.strictEqual(syntaxFor('c'), syntaxFor('cpp'));
+  });
+
+  test('ruby: def body starts right after the signature, begin/rescue is a try', () => {
+    const r = extractBody(['def fetch(id)', '  row = db[id]', '  row', 'end'], syntaxFor('ruby'));
+    assert.strictEqual(r.offset, 1);
+    const t = segmentTree(
+      ['begin', '  risky()', 'rescue KeyError', '  fallback()', 'ensure', '  cleanup()', 'end'],
+      DEFAULT_OPTIONS,
+      syntaxFor('ruby'),
+    );
+    assert.strictEqual(t[0].kind, 'try');
+    assert.strictEqual(t[0].name, 'begin/rescue/ensure');
+  });
+
+  test('php: elseif keeps the source spelling', () => {
+    const t = segmentTree(
+      ['if ($a) {', '  x();', '} elseif ($b) {', '  y();', '} else {', '  z();', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('php'),
+    );
+    assert.strictEqual(t[0].name, 'if/elseif/else');
+  });
+
+  test('swift: guard is a branch, do/catch is the try chain', () => {
+    const g = segmentTree(
+      ['guard let user = user else {', '  return', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('swift'),
+    );
+    assert.strictEqual(g[0].kind, 'branch');
+    assert.strictEqual(g[0].name, 'guard');
+    const t = segmentTree(
+      ['do {', '  try risky()', '} catch {', '  report()', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('swift'),
+    );
+    assert.strictEqual(t[0].kind, 'try');
+    assert.strictEqual(t[0].name, 'do/catch');
+  });
+
+  test('kotlin: when is a switch, data class names the definition', () => {
+    const t = segmentTree(
+      ['when (x) {', '    1 -> a()', '    else -> b()', '}'],
+      DEFAULT_OPTIONS,
+      syntaxFor('kotlin'),
+    );
+    assert.strictEqual(t[0].kind, 'switch');
+    assert.strictEqual(t[0].name, 'when');
+    const d = segmentTree(
+      ['data class Config(', '    val name: String,', '    val port: Int,', ')'],
+      DEFAULT_OPTIONS,
+      syntaxFor('kotlin'),
+    );
+    assert.strictEqual(d[0].name, 'class Config');
   });
 });

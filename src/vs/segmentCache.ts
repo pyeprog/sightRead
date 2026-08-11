@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { SegmentNode, extractBody, segmentTree } from '../core/segmentation';
+import { syntaxFor } from '../core/lang';
+import { DEFAULT_OPTIONS, SegmentNode, extractBody, segmentTree } from '../core/segmentation';
 
 /** A segment tree node with document-absolute line numbers. */
 export type DocSegmentNode = SegmentNode;
@@ -40,8 +41,12 @@ export class SegmentCache {
     for (let i = fnRange.start.line; i <= lastLine; i++) {
       lines.push(doc.lineAt(i).text);
     }
-    const body = extractBody(lines);
-    const tree = offsetTree(segmentTree(body.lines), fnRange.start.line + body.offset);
+    const syntax = syntaxFor(doc.languageId);
+    const body = extractBody(lines, syntax);
+    const tree = offsetTree(
+      segmentTree(body.lines, DEFAULT_OPTIONS, syntax),
+      fnRange.start.line + body.offset,
+    );
     entry.byFn.set(fnKey, tree);
     return tree;
   }
