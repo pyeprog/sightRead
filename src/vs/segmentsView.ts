@@ -188,13 +188,12 @@ export class SegmentsViewFeature
     this.syncMessage();
   }
 
-  /** One message line, two glyph-led fields: spotlight level (◉ lit / ○ off)
-   *  and whether the cursor is inside a function. Codicons don't render in
+  /** One message line, two glyph-led fields: 👁 spotlight level and ⌶ (the
+   *  text-cursor I-beam) in/outside function. Codicons don't render in
    *  tree-view messages (plain string only), hence the unicode glyphs. */
   private syncMessage(): void {
-    const glyph = this.spotlightLevel === 0 ? '○' : '◉';
     const level = SPOTLIGHT_LEVEL_SHORT[this.spotlightLevel];
-    this.view.message = `${glyph} ${level} · ${this.current ? 'in function' : 'outside function'}`;
+    this.view.message = `👁 ${level} · ⌶ ${this.current ? 'in function' : 'outside function'}`;
   }
 
   update(

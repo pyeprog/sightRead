@@ -68,7 +68,7 @@ export class MarkersViewFeature
             .marks.filter((m) => !markVisible(m.accent, hidden)).length;
         }
       }
-      this.view.message = count === 0 ? undefined : `⊘ ${count} hidden`;
+      this.view.message = count === 0 ? undefined : `🚫 ${count} hidden`;
     };
     syncFilterMessage();
     void vscode.commands.executeCommand('setContext', 'sightread.markersFolded', false);

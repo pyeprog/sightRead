@@ -389,13 +389,7 @@
     "viewsWelcome": [
       {
         "view": "sightread.markersView",
-        "when": "isMac",
-        "contents": "$(bookmark) Mark the selection — ⌘K 1 yellow · ⌘K 2 red · ⌘K C any color · ⌘K N color + note.\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
-      },
-      {
-        "view": "sightread.markersView",
-        "when": "!isMac",
-        "contents": "$(bookmark) Mark the selection — Ctrl+K 1 yellow · Ctrl+K 2 red · Ctrl+K C any color · Ctrl+K N color + note.\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
+        "contents": "$(bookmark) Mark the selection in one of five colors, plus a note if you like — every variant has a command and a [default keybinding](command:workbench.action.openGlobalKeybindings?%5B%22sightread%22%5D).\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
       },
       {
         "view": "sightread.trailView",
@@ -423,7 +417,7 @@
           {
             "id": "mark",
             "title": "Mark what matters",
-            "description": "Select lines and mark them in one of five colors — Ctrl/Cmd+K 1–5 drop a color directly, Ctrl/Cmd+K C picks one, Ctrl/Cmd+K N adds a note too. All variants also live in the editor's right-click menu.\n[Mark Selection](command:sightread.markPickColor)",
+            "description": "Select lines and mark them in one of five colors — kb(sightread.markYellow) yellow, kb(sightread.markRed) red (…and so on), kb(sightread.markPickColor) any color, kb(sightread.mark) color + note. All variants also live in the editor's right-click menu.\n[Mark Selection](command:sightread.markPickColor)",
             "media": {
               "svg": "media/walkthrough/mark.svg",
               "altText": "Code lines carrying yellow, red and green markers, the yellow one with a note"
