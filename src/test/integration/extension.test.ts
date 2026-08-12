@@ -1,9 +1,13 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { type Guide, type Mark, addGuide } from '../../core/marks';
 import { accentPaint } from '../../vs/palette';
 import type { Compositor, SpotlightRender } from '../../vs/compositor';
 import type { EntriesFeature } from '../../vs/entries';
+import type { EntriesNode, EntriesViewFeature, ModuleEntry } from '../../vs/entriesView';
 import { type MarkRepository, migrateLegacyStorage } from '../../vs/markRepository';
 import type { MarkersViewFeature } from '../../vs/markersView';
 import type { SegmentsViewFeature } from '../../vs/segmentsView';
@@ -15,6 +19,7 @@ interface TestApi {
     compositor: Compositor;
     markersView: MarkersViewFeature;
     entries: EntriesFeature;
+    entriesView: EntriesViewFeature;
     segmentsView: SegmentsViewFeature;
     trailView: TrailViewFeature;
   };
@@ -92,6 +97,8 @@ suite('SightRead integration', () => {
       'sightread.goToSegment',
       'sightread.goToEntry',
       'sightread.peekEntryReferences',
+      'sightread.entriesRefresh',
+      'sightread.peekEntryItem',
     ]) {
       assert.ok(commands.includes(id), `missing command ${id}`);
     }
@@ -961,6 +968,107 @@ suite('SightRead integration', () => {
       ],
     );
     assert.strictEqual(lenses[0].command?.command, 'sightread.peekEntryReferences');
+  });
+
+  /** On-disk fixture for the entries view's module tier: mod/a.js exports foo
+   *  (referenced from OUTSIDE the directory) and bar (referenced only by the
+   *  sibling b.js), plus an unexported orphan. Real files — module = directory. */
+  let moduleFixture: { a: vscode.Uri; outside: vscode.Uri } | undefined;
+  async function openModuleFixture(): Promise<vscode.TextDocument> {
+    if (!moduleFixture) {
+      const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sightread-entries-')));
+      const mod = path.join(root, 'mod');
+      fs.mkdirSync(mod);
+      fs.writeFileSync(
+        path.join(mod, 'a.js'),
+        [
+          'export function foo() {',
+          '  return 1;',
+          '}',
+          '',
+          'export function bar() {',
+          '  return 2;',
+          '}',
+          '',
+          'function orphan() {',
+          '  return 3;',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(mod, 'b.js'), "import { bar } from './a';\n\nbar();\n");
+      fs.writeFileSync(path.join(root, 'outside.js'), "import { foo } from './mod/a';\n\nfoo();\n");
+      moduleFixture = {
+        a: vscode.Uri.file(path.join(mod, 'a.js')),
+        outside: vscode.Uri.file(path.join(root, 'outside.js')),
+      };
+    }
+    // the referencing file must be an open document, or the JS service's
+    // inferred project won't contain it and foo's outside ref stays invisible
+    await vscode.workspace.openTextDocument(moduleFixture.outside);
+    const doc = await vscode.workspace.openTextDocument(moduleFixture.a);
+    await vscode.window.showTextDocument(doc);
+    return doc;
+  }
+
+  test('entries view: current-file entries at root, module group last', async function () {
+    this.timeout(60000);
+    const api = await getApi();
+    const view = api._test.entriesView;
+    const feature = api._test.entries;
+    const doc = await openModuleFixture();
+
+    let names: string[] = [];
+    let roots: EntriesNode[] = [];
+    for (let i = 0; i < 100; i++) {
+      const scan = feature.ensureScan(doc, true);
+      await scan.done;
+      roots = view.getChildren();
+      names = roots
+        .filter((n): n is Extract<EntriesNode, { kind: 'symbol' }> => n.kind === 'symbol')
+        .map((n) => n.sym.name);
+      if (names.join(',') === 'foo,bar,orphan') {
+        break;
+      }
+      await sleep(200);
+    }
+    assert.deepStrictEqual(
+      names,
+      ['foo', 'bar', 'orphan'],
+      'entries in line order first, the suspected orphan last',
+    );
+    assert.strictEqual(roots[roots.length - 1]?.kind, 'module', 'module group is the last root');
+  });
+
+  test('entries view: module group lists only symbols referenced from outside the directory', async function () {
+    this.timeout(60000);
+    const api = await getApi();
+    const view = api._test.entriesView;
+    await openModuleFixture();
+
+    let entries: ModuleEntry[] = [];
+    for (let i = 0; i < 100; i++) {
+      // refresh marks the module tier dirty; querying the group's children is
+      // what expansion does, and that kicks the scan
+      await vscode.commands.executeCommand('sightread.entriesRefresh');
+      view.getChildren({ kind: 'module' });
+      await view.moduleScanDone;
+      entries = view
+        .getChildren({ kind: 'module' })
+        .filter((n): n is Extract<EntriesNode, { kind: 'moduleEntry' }> => n.kind === 'moduleEntry')
+        .map((n) => n.entry);
+      if (entries.length === 1 && entries[0].outsideModuleRefs > 0) {
+        break;
+      }
+      await sleep(200);
+    }
+    assert.deepStrictEqual(
+      entries.map((e) => [e.uriString.split('/').pop(), e.name]),
+      [['a.js', 'foo']],
+      'foo (referenced from outside mod/) is in; bar (sibling-only refs) and orphan are out',
+    );
+    // outside.js refs foo twice: the import binding and the call
+    assert.ok(entries[0].outsideModuleRefs > 0, 'counts the refs from outside the directory');
   });
 
   test('trail: a real go-to-definition jump records caller → callee', async function () {

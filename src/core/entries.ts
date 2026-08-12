@@ -47,6 +47,11 @@ export interface EntryEvidence {
    * symbol workspace-wide, so they say nothing about this file.
    */
   alias?: boolean;
+  /**
+   * external refs coming from OUTSIDE the file's directory (⊆ externalRefs).
+   * Powers the module tier of the entries view.
+   */
+  outsideModuleRefs?: number;
 }
 
 /**
@@ -83,6 +88,21 @@ export function classifyEntry(e: EntryEvidence): EntryVerdict {
     return 'hidden';
   }
   return 'suspected';
+}
+
+/**
+ * Module-level verdict: is this symbol a way INTO its directory? A barrel
+ * re-export (an alias the file declares public) qualifies by declaration —
+ * that is the module publishing its surface. Anything else qualifies only on
+ * hard evidence: a reference from outside the directory. Suspected symbols
+ * never reach the module tier — a whole directory of unreferenced symbols
+ * would drown it in noise.
+ */
+export function isModuleEntry(e: EntryEvidence): boolean {
+  if (e.alias) {
+    return e.declaredPublic === true;
+  }
+  return (e.outsideModuleRefs ?? 0) > 0;
 }
 
 const EXPORT_KEYWORD_LANGUAGES = new Set([

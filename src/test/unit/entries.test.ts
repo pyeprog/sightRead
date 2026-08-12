@@ -5,6 +5,7 @@ import {
   isExportClauseLine,
   isImportLine,
   isMainGuardRef,
+  isModuleEntry,
   parseExportedNames,
 } from '../../core/entries';
 
@@ -291,5 +292,39 @@ suite('entries: parseExportedNames', () => {
 
   test('languages without static export clauses → empty', () => {
     assert.strictEqual(parseExportedNames('go', 'export { foo }').size, 0);
+  });
+});
+
+suite('entries: isModuleEntry', () => {
+  test('outside-directory reference qualifies', () => {
+    assert.strictEqual(
+      isModuleEntry({ externalRefs: 3, wrappedRefs: 0, outsideModuleRefs: 1 }),
+      true,
+    );
+  });
+
+  test('barrel re-export qualifies without refs', () => {
+    assert.strictEqual(
+      isModuleEntry({ externalRefs: 0, wrappedRefs: 0, alias: true, declaredPublic: true }),
+      true,
+    );
+  });
+
+  test('inside-only refs or silent syntax do not qualify', () => {
+    // referenced, but only from sibling files in the same directory
+    assert.strictEqual(
+      isModuleEntry({ externalRefs: 2, wrappedRefs: 0, outsideModuleRefs: 0 }),
+      false,
+    );
+    // exported yet unused from outside — the module tier wants hard evidence
+    assert.strictEqual(
+      isModuleEntry({ externalRefs: 0, wrappedRefs: 0, declaredPublic: true }),
+      false,
+    );
+    // an unpublished alias is someone else's symbol
+    assert.strictEqual(
+      isModuleEntry({ externalRefs: 5, wrappedRefs: 0, outsideModuleRefs: 5, alias: true }),
+      false,
+    );
   });
 });

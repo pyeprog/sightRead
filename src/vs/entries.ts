@@ -12,7 +12,9 @@ import {
 const SCAN_DEBOUNCE_MS = 1200;
 const FIRE_THROTTLE_MS = 80;
 const MAX_CONCURRENT_REF_QUERIES = 6;
-const MAX_CACHED_SCANS = 8;
+// large enough to hold a whole directory of per-file scans (the entries
+// view's module tier walks every sibling file); a scan is just symbol metadata
+const MAX_CACHED_SCANS = 64;
 
 /** documents the lens runs on — editors, not output panes or settings */
 const LENS_SELECTOR: vscode.DocumentSelector = [{ scheme: 'file' }, { scheme: 'untitled' }];
@@ -30,7 +32,13 @@ export interface EntrySymbol {
   /** declaredPublic came from a `__main__` guard — described as "script entry" */
   scriptEntry?: boolean;
   /** undefined while the reference query is pending */
-  evidence?: { externalRefs: number; wrappedRefs: number; scriptRefs: number };
+  evidence?: {
+    externalRefs: number;
+    wrappedRefs: number;
+    scriptRefs: number;
+    /** external refs from outside the file's directory (⊆ externalRefs) */
+    outsideModuleRefs: number;
+  };
 }
 
 interface Scan {
@@ -63,7 +71,13 @@ function basename(uriString: string): string {
   return path.split('/').pop() ?? path;
 }
 
-const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
+/** parent of the last path segment — the module boundary the entries view groups by */
+export function dirOf(uriString: string): string {
+  const i = uriString.lastIndexOf('/');
+  return i < 0 ? uriString : uriString.slice(0, i);
+}
+
+export const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
   [vscode.SymbolKind.Module]: 'symbol-namespace',
   [vscode.SymbolKind.Namespace]: 'symbol-namespace',
   [vscode.SymbolKind.Package]: 'symbol-package',
@@ -84,11 +98,12 @@ const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
 
 /**
  * The entry-points engine: the file's top-level symbols classified by where
- * their references live (core/entries.ts). Two consumers, no sidebar view:
- * a CodeLens above each entry declaration (`» entry — 3 external refs`,
- * click peeks the references) and the `Go to Entry Point…` quick pick.
- * Scans are version-cached per document; the lens streams in as the
- * reference queries complete.
+ * their references live (core/entries.ts). Three consumers: a CodeLens above
+ * each entry declaration (`» entry — 3 external refs`, click peeks the
+ * references), the `Go to Entry Point…` quick pick, and the Entry Points
+ * sidebar view (entriesView.ts, which adds a module tier on top). Scans are
+ * version-cached per document; results stream in as the reference queries
+ * complete.
  */
 export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposable {
   /** refires quick-pick refills and codelens refreshes as evidence streams in */
@@ -205,7 +220,7 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
     // symbol, and skipping them skips a workspace-wide reference query)
     for (const s of mapped) {
       if (s.alias && s.declaredPublic === true) {
-        s.evidence = { externalRefs: 0, wrappedRefs: 0, scriptRefs: 0 };
+        s.evidence = { externalRefs: 0, wrappedRefs: 0, scriptRefs: 0, outsideModuleRefs: 0 };
       }
     }
     scan.symbols = mapped.filter((s) => !s.alias || s.declaredPublic === true);
@@ -263,9 +278,14 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
     let externalRefs = 0;
     let wrappedRefs = 0;
     let scriptRefs = 0;
+    let outsideModuleRefs = 0;
+    const moduleDir = dirOf(scan.uriString);
     for (const loc of locs) {
       if (loc.uri.toString() !== scan.uriString) {
         externalRefs++;
+        if (dirOf(loc.uri.toString()) !== moduleDir) {
+          outsideModuleRefs++;
+        }
         continue;
       }
       if (sym.range.contains(loc.range.start)) {
@@ -293,7 +313,7 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
       }
       scriptRefs++;
     }
-    sym.evidence = { externalRefs, wrappedRefs, scriptRefs };
+    sym.evidence = { externalRefs, wrappedRefs, scriptRefs, outsideModuleRefs };
     await this.detectAlias(doc, scan, sym);
   }
 
@@ -333,7 +353,7 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
     }
   }
 
-  private verdictOf(sym: EntrySymbol): EntryVerdict | undefined {
+  verdictOf(sym: EntrySymbol): EntryVerdict | undefined {
     if (!sym.evidence) {
       return undefined;
     }

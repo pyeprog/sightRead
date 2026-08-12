@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { invalidateHarnessCache } from './vs/agentCli';
 import { Compositor } from './vs/compositor';
 import { EntriesFeature, registerEntryCommands } from './vs/entries';
+import { EntriesViewFeature } from './vs/entriesView';
 import { GuideFeature } from './vs/guideFeature';
 import { handleDocumentChange, registerHighlighterCommands } from './vs/highlighter';
 import { MarkRepository } from './vs/markRepository';
@@ -43,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const markersView = new MarkersViewFeature(repo, compositor);
   const segmentsView = new SegmentsViewFeature(repo, compositor);
   const entries = new EntriesFeature();
+  const entriesView = new EntriesViewFeature(entries);
   const trailView = new TrailViewFeature(repo, compositor);
   // one channel for every AI run — interpret, route and trace all log here
   const channel = vscode.window.createOutputChannel('SightRead');
@@ -53,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
     markersView,
     segmentsView,
     entries,
+    entriesView,
     trailView,
     channel,
     guideFeature,
@@ -285,6 +288,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
       spotlight,
       markersView,
       entries,
+      entriesView,
       segmentsView,
       trailView,
     },

@@ -239,6 +239,17 @@
         "category": "SightRead"
       },
       {
+        "command": "sightread.entriesRefresh",
+        "title": "Refresh Entry Points",
+        "category": "SightRead",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sightread.peekEntryItem",
+        "title": "Peek References",
+        "category": "SightRead"
+      },
+      {
         "command": "sightread.revealLocation",
         "title": "Reveal Location",
         "category": "SightRead"
@@ -383,6 +394,12 @@
           "id": "sightread.trailView",
           "name": "Trail",
           "icon": "$(type-hierarchy)"
+        },
+        {
+          "id": "sightread.entriesView",
+          "name": "Entry Points",
+          "icon": "$(sign-in)",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -394,6 +411,10 @@
       {
         "view": "sightread.trailView",
         "contents": "Definition and reference jumps you make while this view is open build the call tree you walked.\n$(map) The button above finds logic routes (AI): type a goal, get a planned path that lights up as you read."
+      },
+      {
+        "view": "sightread.entriesView",
+        "contents": "$(sign-in) Open a file to list its entry points — the symbols the rest of the codebase enters through."
       }
     ],
     "walkthroughs": [
@@ -522,6 +543,10 @@
           "when": "false"
         },
         {
+          "command": "sightread.peekEntryItem",
+          "when": "false"
+        },
+        {
           "command": "sightread.foldSegmentDeep",
           "when": "false"
         },
@@ -624,9 +649,19 @@
           "command": "sightread.trailClear",
           "when": "view == sightread.trailView",
           "group": "1_manage@1"
+        },
+        {
+          "command": "sightread.entriesRefresh",
+          "when": "view == sightread.entriesView",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
+        {
+          "command": "sightread.peekEntryItem",
+          "when": "view == sightread.entriesView && viewItem == entry",
+          "group": "1_peek@1"
+        },
         {
           "command": "sightread.removeMarker",
           "when": "view == sightread.markersView && viewItem == mark",

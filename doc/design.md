@@ -107,13 +107,14 @@
 - 入口在 **Segments 视图标题栏的 👁 按钮**与**状态栏的 👁 项**（显示当前档位，点击开档位选择器）；当前档位常驻 **Segments 视图的 message 行**（`◈ Seg+Var · ↖ in function` / `◇ Off · ↖ outside function`——◇/◈ 一对认 spotlight 开关：空心=Off、菱中带点=聚焦中；↖ 认光标字段；TreeView.message 是纯字符串、不渲染 codicon；◉/○/◎ 圆形字形与字母难分、彩色 emoji 与 codicon 图标语言相抵、眼睛字形连 U+FE0E 都压不住照样出彩色，均实测被否）。
 - `sightread.spotlight.defaultMode`：启动时应用的默认档位（off / seg+var / seg / fn，默认 off）。
 
-### 3.6 入口点（entry points，2026-07-09；2026-08-11 视图退役为引擎）
+### 3.6 入口点（entry points，2026-07-09；2026-08-11 视图退役为引擎；2026-08-12 视图回归+模块层）
 
 - **动机**（原 doc/inbox 想法）：列举出当前文件所有的"入口"——所有会 export 出去、被外界调用的函数/类/变量。先列举，之后直接顺着引用往下看，再做筛选——给阅读一个文件的路径指出一条明路：从入口开始读，而不是从第一行开始读。
-- **呈现（2026-08-11 重定）**：侧边栏视图砍掉——它只有"我知道实现在这个文件里，想一步步读懂"这一个使用时刻，配不上一个常驻面板。分类引擎保留，两个消费面：
+- **呈现**：一个分类引擎，三个消费面（2026-08-11 曾把旧视图砍成纯引擎；2026-08-12 以"code review 找入口"这一使用时刻加回，默认折叠不占地）：
   - **CodeLens**：每个入口声明行上方一行 `» entry — 3 external refs`（疑似入口 `» suspected entry — no refs found`），点击 peek 该符号的引用（装饰 gutter 图标做不了 tooltip/点击，是 VS Code 的多年开放缺口，CodeLens 是唯一能挂信息又能点的编辑器内通道）。`sightread.entries.codeLens` 可关。
   - **`Go to Entry Point…` QuickPick**：按需列表，entry 在前、suspected 分区在后，边扫描边流式填充。
-  - 成员懒分类（类方法逐个展开）随视图一并退役——CodeLens 只标顶层符号。
+  - **Entry Points 视图**（排所有视图最后、`visibility: collapsed` 默认折叠——该默认只对新装生效，之后跟随用户手动状态）：根 = 当前文件入口平铺（与 CodeLens 同排序；suspected 置底，description 标 `suspected — …`，TreeItem label 做不了透明度灰显），末尾一个 **Module 组** = 当前文件所在目录（不递归）中被**目录外**引用的符号 + barrel 再发布名（`isModuleEntry`；suspected 不进模块层——整目录的无引用符号涌入是噪音；只在目录内被兄弟文件引用的也不算——模块层回答"外界从哪进这个目录"）。模块扫描昂贵（逐兄弟文件跑 per-file scan），仅在组**展开时**进行、逐文件流式填充、按 outside refs 降序排；目录内保存后防抖重扫（未变文件命中版本缓存）；文件数上限 40，超出在组行 description 说明。标题栏 $(refresh)，item 单击 reveal、右键 peek references。
+  - 成员懒分类（类方法逐个展开）不随视图回归——三个消费面都只标顶层符号。
 - 每个顶层符号按**引用位置**分类（`executeReferenceProvider`）：
   - 有文件外引用 → **入口**；
   - 有来自**其他符号 body 内**的同文件引用（wrapped）→ 隐藏——存在更抽象的包装者，读者应从包装者读起；
@@ -209,7 +210,8 @@ src/
     skeletonFold.ts   折叠命令对
     segmentsView.ts   Segments 树视图（光标联动 + 亮暗镜像）+ Go to Segment
     markersView.ts    Markers 树视图（按文件分组，guide 壳 + loose 标记行序混排）
-    entries.ts        入口点引擎：CodeLens + Go to Entry Point QuickPick（无视图）
+    entries.ts        入口点引擎：按版本缓存的扫描/分类，CodeLens + QuickPick 消费
+    entriesView.ts    Entry Points 树视图（文件层平铺 + Module 组懒扫描流式填充）
     trailView.ts      Trail 树视图（记录器 + LSP 验证 + 可见性门控 + 回放缓冲 + 路线播种/点亮）
     agentCli.ts       harness 探测与 headless 驱动（spawn/超时/取消）
     guideFeature.ts   AI 解读命令流（目标解析 → prompt → 进度 → 入库渲染）+ Filter Marks
@@ -219,7 +221,7 @@ src/
   extension.ts     事件接线：统一的光标管线（防抖 + 过期令牌），文档变更分发，共享 Output channel
 ```
 
-统一光标管线：`selection 变化 → 找函数 → 喂 trail/各视图 reveal → 算 tint → 算段落 → 算焦点 → compositor.render`。中途文档/光标再变则丢弃（令牌失效）。settled 状态是唯一数据源：trail 记录器与 Entry Points / Markers / Segments 三个视图的光标跟随都消费它。
+统一光标管线：`selection 变化 → 找函数 → 喂 trail/各视图 reveal → 算 tint → 算段落 → 算焦点 → compositor.render`。中途文档/光标再变则丢弃（令牌失效）。settled 状态是唯一数据源：trail 记录器与 Markers / Segments 两个视图的光标跟随都消费它（Entry Points 视图跟随活动编辑器换文件，不跟随光标）。
 
 存储两处：统一标记仓库（workspaceState，单 key `sightread.marks`；2026-08-11 由 markers/guides 双 key 合并，首次激活自动迁移），harness 运行时长（globalState——时长属于本机的 CLI，不属于某个 workspace）。段落是带缓存的现算，变量染色和折叠零存储，阅读轨迹与 AI 路线纯内存（关窗即弃）。
 可观察性：一个 **"SightRead" Output channel**（extension.ts 创建、Guide/Route 两个 feature 共享）记录每次 AI 运行——解读与路线一视同仁：原始回复、解析结果/失败原因、hop 丢弃记录。
@@ -229,7 +231,7 @@ src/
 这轮 UI 规范化沉淀的横切规则，改任何 UI 面前先对照本节。
 
 - **命令命名**：动词开头祈使式；括号只保留 `(AI)` 一种用途；结尾 `…` 当且仅当会先弹选择/输入（AI 命令除外，`(AI)` 已表明对话流程）；`Remove` = 删指定对象、`Clear` = 清空集合；冒号家族仅用于同一动作的枚举变体（`Spotlight: X`、`Mark Selection: <Color>`）；view item 菜单用短名——上下文已知则省略宾语（`Mark…`、`Fold Inside`）。
-- **View 头部两通道**：description = 在看什么（Segments=函数名、Trail=`Route: <label>`、Markers=空）；message = 状态偏离或图例（Markers=`⊘ N hidden`、Trail=徽标图例、Segments=`◇/◈ 档位 · ↖ in/outside function`，◇=Off、◈=开）。message 是纯字符串——不渲染 codicon，图形只用**贴近 codicon 风格的单色线形字形**（★ ↻ ↙ ↖ ◇ ◈ ⊘ 一族）；圆形小几何符号（◉ ○ ◎）与字母/数字难分，emoji 一律不用——眼睛字形带 U+FE0E 在部分字体链下照样渲染成彩色，实测被否。message 非空会压制 viewsWelcome，所以"无偏离"时必须置 undefined，不许留空转态文案。
+- **View 头部两通道**：description = 在看什么（Segments=函数名、Trail=`Route: <label>`、Markers=Entry Points=空）；message = 状态偏离或图例（Markers=`⊘ N hidden`、Trail=徽标图例、Segments=`◇/◈ 档位 · ↖ in/outside function`，◇=Off、◈=开）。message 是纯字符串——不渲染 codicon，图形只用**贴近 codicon 风格的单色线形字形**（★ ↻ ↙ ↖ ◇ ◈ ⊘ 一族）；圆形小几何符号（◉ ○ ◎）与字母/数字难分，emoji 一律不用——眼睛字形带 U+FE0E 在部分字体链下照样渲染成彩色，实测被否。message 非空会压制 viewsWelcome，所以"无偏离"时必须置 undefined，不许留空转态文案。
 - **标题按钮**：排序 AI/主动作 → 新建/标记 → 模式开关 → 过滤 → 树折叠；破坏性动作一律入 "…" 溢出菜单；状态切换用动态互换按钮对（fold/unfold、filter/filter-filled）；图标一律单色 codicon。collapse/expand-all 只给"深度 ≥2 且默认展开"的树（Segments 的 fold 对是其超集且同步编辑器，不叠加原生 collapse-all）。
 - **空态（viewsWelcome）**：两行、零按钮：第一行本体功能，第二行 AI 功能并指向上方按钮。welcome 里 codicon `$(icon)` 可渲染，行首图标必须与所指的标题按钮**同一 codicon**（Markers 第一行 = `$(note)` 即 Mark with Note 按钮、第二行 = `$(sparkle)`、Trail = `$(map)`）；**整行只有一个链接会被渲染成按钮**，故禁止整行链接，行内链接可用。**键位一律不写死**——welcome 无键位替换语法，静态键位在用户改绑后即错；要引导键位就放行内链接 `command:workbench.action.openGlobalKeybindings?["sightread"]` 指向实时键位页。walkthrough 有 `kb(commandId)` 宏（渲染当前实际键位、自动分平台），那边用宏。空态按钮是强引导，只留给明确要引导点击的场景（当前无处够格）；临时性空态走 message 一句话。
 - **快捷键**：统一 `Ctrl/Cmd+K` 前缀 chord 家族：`1–5` 五色直标、`C` 选色、`N` 选色+note、`⌫` 删选区标记、`G` 解读、`L` 聚光灯、`[` `]` 骨架折叠。新键先查 VS Code 默认 chord 表（`K M`/`K R`/`K O` 等已被占）。
