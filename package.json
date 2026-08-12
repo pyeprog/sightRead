@@ -389,7 +389,7 @@
     "viewsWelcome": [
       {
         "view": "sightread.markersView",
-        "contents": "$(bookmark) Mark the selection in one of five colors, plus a note if you like — every variant has a command and a [default keybinding](command:workbench.action.openGlobalKeybindings?%5B%22sightread%22%5D).\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
+        "contents": "$(note) Mark the selection in one of five colors, plus a note if you like — every variant has a command and a [default keybinding](command:workbench.action.openGlobalKeybindings?%5B%22sightread%22%5D).\n$(sparkle) The button above runs Interpret Current (AI): role-colored signposts across the function, class or file you're reading."
       },
       {
         "view": "sightread.trailView",

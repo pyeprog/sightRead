@@ -188,12 +188,13 @@ export class SegmentsViewFeature
     this.syncMessage();
   }
 
-  /** One message line, two glyph-led fields: 👁 spotlight level and ⌶ (the
-   *  text-cursor I-beam) in/outside function. Codicons don't render in
-   *  tree-view messages (plain string only), hence the unicode glyphs. */
+  /** One message line, two glyph-led fields: the eye (spotlight level, same
+   *  motif as the status-bar item) and ↖ (cursor) in/outside function.
+   *  Codicons don't render in tree-view messages (plain string only) — the
+   *  eye carries U+FE0E to force the monochrome text glyph, never emoji. */
   private syncMessage(): void {
     const level = SPOTLIGHT_LEVEL_SHORT[this.spotlightLevel];
-    this.view.message = `👁 ${level} · ⌶ ${this.current ? 'in function' : 'outside function'}`;
+    this.view.message = `👁︎ ${level} · ↖ ${this.current ? 'in function' : 'outside function'}`;
   }
 
   update(

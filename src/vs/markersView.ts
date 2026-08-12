@@ -68,7 +68,9 @@ export class MarkersViewFeature
             .marks.filter((m) => !markVisible(m.accent, hidden)).length;
         }
       }
-      this.view.message = count === 0 ? undefined : `🚫 ${count} hidden`;
+      // no glyph: nothing monochrome reads as "filter" at message size, and
+      // emoji clash with the codicon icon language — the words carry it
+      this.view.message = count === 0 ? undefined : `${count} hidden`;
     };
     syncFilterMessage();
     void vscode.commands.executeCommand('setContext', 'sightread.markersFolded', false);
