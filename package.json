@@ -423,7 +423,7 @@
           {
             "id": "mark",
             "title": "Mark what matters",
-            "description": "Select lines and mark them in one of five colors — the editor's right-click menu has the color and note variants, and each color has its own command for a custom keybinding.\n[Mark Selection](command:sightread.markPickColor)",
+            "description": "Select lines and mark them in one of five colors — Ctrl/Cmd+K 1–5 drop a color directly, Ctrl/Cmd+K C picks one, Ctrl/Cmd+K N adds a note too. All variants also live in the editor's right-click menu.\n[Mark Selection](command:sightread.markPickColor)",
             "media": {
               "svg": "media/walkthrough/mark.svg",
               "altText": "Code lines carrying yellow, red and green markers, the yellow one with a note"

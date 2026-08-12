@@ -55,7 +55,7 @@ And in v1.4.0 I made a decision that betrays this very creed: AI-assisted readin
 Orthogonal features, each providing a different kind of visual assistance (see design.md §2):
 
 - 🦴 **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
-- 🖍️ **Highlighter (markers)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first, optionally with a short note saying what the block does.
+- 🖍️ **Highlighter (marks)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first (`⌘K 1`–`5` drop one of the five colors directly), optionally with a short note saying what the block does. Manual marks and AI guide steps are one model: the same rendering, the same `Filter Marks…` (hide any color or role everywhere at once), the same edit rule — an edit deletes exactly the marks it touches, the rest shift along. Two color bands to choose from (`sightread.palette`: vivid / soft), each with separate dark- and light-theme values.
 - 🎯 **Variable tint** — within the context of the enclosing function, outlines the symbol under the cursor, so you can see at a glance where this variable was created and where it is used.
 - 🔦 **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar and pick a level.
   1. **Function** — only the current function; other functions are dimmed
@@ -63,13 +63,13 @@ Orthogonal features, each providing a different kind of visual assistance (see d
   3. **Segment+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
   4. **Off** — spotlight off, the default mode.
 - 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
-- 🚪 **Entry points** — a sidebar view listing where a file's control flow can be entered from the outside, so you can read a file starting from its entries and follow the references down, instead of starting from line one. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → hidden; no references anywhere → a de-emphasized "suspected" entry (framework hooks like `activate`, route handlers — or dead code). Gutter chevrons (») mark the entry lines in the editor.
-- 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site and show the line in the caller where they are called (`↙ line 88`, right-click → `Go to Caller Site` to jump there); nodes whose body carries a highlighter marker are tinted in the marker's color. The trail lives in memory only and is discarded when the window closes.
+- 🚪 **Entry points** — read a file starting from where the outside world calls in, instead of from line one. A CodeLens above each entry declaration reads `» entry — 3 external refs`; click it to peek those references. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → no lens; no references anywhere → a dimmed `suspected entry` (framework hooks like `activate`, route handlers — or dead code). `Go to Entry Point…` lists every entry of the file on demand.
+- 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site and show the line in the caller where they are called (`↙ L88`, right-click → `Go to Call Site` to jump there); nodes whose body carries a highlighter mark are tinted in the mark's color, and the view follows your cursor — the node you are inside gets selected. The trail lives in memory only and is discarded when the window closes.
 - 🤖 **AI-assisted reading** — the extension's optional AI layer, with one philosophy: signposts only, never a translation of the code. Three commands, all driving a coding-agent CLI you already have (`claude` (Claude Code), `codex` (Codex CLI), `opencode`, `pi`, `cursor-agent`, `devin`, `aider`, `agy` — auto-detected, custom commands configurable), headless; you log in or configure an API key yourself beforehand.
-  - `SightRead: Interpret Current (AI)` — the code at the cursor — a function, a class, or the whole file — gets annotated **in place** as role-colored steps: where the main body is, what is setup / fallback / special-case handling, and *why* each core entity exists. The results hang under the Markers view.
-  - `SightRead: Plan Reading Route (AI)` — type a reading goal ("how does X work?"); the agent explores the repository read-only and lays a **planned route** into the Trail view: a dim tree starting at the entry, ★ marking the hops that actually implement the goal, the AI's why-note on hover. Planned hops light up as you actually read them; real jumps confirm the planned edges. Routes coexist — the goal of the route you are reading shows above the tree.
-  - `SightRead: Trace Entries to Current Code (AI)` — the reverse: every entry that reaches the code under your cursor, laid out as chains converging on it (★ marks the entries). Route commands need a harness with read-only exploration — builtin for `claude` / `codex` / `opencode` / `devin` / `agy`, or a custom profile declaring `exploreArgs`; raw responses and any dropped hops are logged to the "SightRead" output channel.
-- 🗂️ **Sidebar** — the SightRead activity-bar container holds four views: **Entry Points** (where to start reading the file), **Segments** (the current function's segment tree), **Markers** (all highlighter marks and AI guides in the workspace) and **Trail** (the call structure you have walked, plus AI-planned routes). All four follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
+  - `SightRead: Interpret Current (AI)` — the code at the cursor — a function, a class, or the whole file — gets annotated **in place** as role-colored steps: where the main body is, what is setup / fallback / special-case handling, and *why* each core entity exists. The steps are ordinary marks: edit their notes, delete them one by one, filter them by role; the guide hangs under the Markers view.
+  - `SightRead: Find Logic Routes (AI)` — type a reading goal ("how does X work?"); the agent explores the repository read-only and lays a **planned route** into the Trail view: a dim tree starting at the entry, ★ marking the hops that actually implement the goal, the AI's why-note on hover. The symbol under your cursor rides along in the prompt, so the goal may just say "it" ("who calls it?"). Planned hops light up as you actually read them; real jumps confirm the planned edges. Routes coexist — the goal of the route you are reading shows above the tree.
+  - `SightRead: Trace Back to Entries (AI)` — the reverse: every entry that reaches the code under your cursor, laid out as chains converging on it (★ marks the entries). Route commands need a harness with read-only exploration — builtin for `claude` / `codex` / `opencode` / `devin` / `agy`, or a custom profile declaring `exploreArgs`; raw responses and any dropped hops are logged to the "SightRead" output channel.
+- 🗂️ **Sidebar** — the SightRead activity-bar container holds three views: **Segments** (the current function's segment tree), **Markers** (every mark and AI guide in the workspace) and **Trail** (the call structure you have walked, plus AI-planned routes). All three follow the cursor. Together they naturally cover what Outline does — where Outline lists every symbol unfiltered, SightRead shows you the real structure of the code you are actually reading.
 
 ## ⌨️ Commands
 
@@ -77,50 +77,58 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 
 | Command | What it does |
 |---|---|
-| `SightRead: Fold Skeleton (Current Function)` | fold every block inside the current function to see its large structure |
-| `SightRead: Unfold Skeleton (Current Function)` | unfold them again |
-| `SightRead: Mark Selection (Favorite Color)` | one-click marker in your favorite color (`sightread.marker.favoriteColor`) |
-| `SightRead: Mark Selection (Pick Color)…` | highlighter-mark the selection, picking a color |
-| `SightRead: Mark Selection (Color + Note)…` | pick a color and attach an optional note |
-| `SightRead: Add/Edit Marker Note` | attach or edit the short note on the marker under the cursor |
-| `SightRead: Remove Markers in Selection` | clear markers touching the selection |
-| `SightRead: Remove Markers in Current Function` | clear markers in the enclosing function |
-| `SightRead: Remove Markers in File` | clear markers in the current file |
-| `SightRead: Remove All Markers & Guides (Workspace)` | clear every marker and AI guide in the workspace |
+| `SightRead: Fold Skeleton` / `Unfold Skeleton` | fold every block inside the current function to see its large structure, and unfold them again |
+| `SightRead: Mark Selection with Color…` | highlighter-mark the selection, picking a color |
+| `SightRead: Mark Selection with Note…` | pick a color and attach an optional note |
+| `SightRead: Mark Selection: Yellow` … `: Purple` | drop that color directly (one command per color) |
+| `SightRead: Edit Marker Note` | attach or edit the short note on the mark under the cursor |
+| `SightRead: Remove Markers in Selection` | clear marks touching the selection |
+| `SightRead: Remove Markers in Current Function` | clear marks in the enclosing function |
+| `SightRead: Remove Markers in File` | clear marks in the current file |
+| `SightRead: Clear All Markers and Guides` | clear every mark and AI guide in the workspace |
+| `SightRead: Filter Marks…` | multi-select which colors and AI roles stay visible; unchecked ones disappear everywhere — editor, views, label tints |
 | `SightRead: Interpret Current (AI)` | AI-annotate the function / class / file at the cursor with role-tagged signposts |
-| `SightRead: Filter Guide Steps by Role…` | multi-select which role tags stay visible in the editor; unchecked ones are hidden (the Markers view still lists every step) |
-| `SightRead: Choose Spotlight Level…` | pick the level from a list, same as clicking the 👁 status-bar item |
-| `SightRead: Spotlight: Focus Current Function` | jump straight to the Function level |
-| `SightRead: Spotlight: Focus Current Segment` | jump straight to the Segment level |
-| `SightRead: Spotlight: Focus Segment + Variable Uses` | jump straight to the Segment+Var level |
-| `SightRead: Spotlight: Off` | turn the spotlight off |
+| `SightRead: Find Logic Routes (AI)` | type a reading goal; the agent explores the repo and seeds a planned (dim) route into the Trail view |
+| `SightRead: Trace Back to Entries (AI)` | list every entry that reaches the code under the cursor, as chains in the Trail view |
+| `SightRead: Spotlight: Choose Level…` | pick the level from a list, same as clicking the 👁 status-bar item |
+| `SightRead: Spotlight: Off` / `: Function` / `: Segment` / `: Segment + Variables` | jump straight to a level |
 | `SightRead: Toggle Variable Tint` | turn occurrence outlining on or off |
 | `SightRead: Go to Segment…` | QuickPick over the current function's segments |
 | `SightRead: Go to Entry Point…` | QuickPick over the file's entry points |
-| `SightRead: Refresh Entry Points` | re-scan the current file's entries |
-| `SightRead: Pin Current Function to Trail` | seed the trail with the current function as a root |
-| `SightRead: Pause Trail Recording` / `Resume Trail Recording` | stop/restart recording while the Trail view stays open |
-| `SightRead: Clear Trail` | discard the recorded call map |
-| `SightRead: Plan Reading Route (AI)` | type a reading goal; the agent explores the repo and seeds a planned (dim) route into the Trail view |
-| `SightRead: Trace Entries to Current Code (AI)` | list every entry that reaches the code under the cursor, as chains in the Trail view |
-| `SightRead: Clear Routes` | remove the still-planned route hops and every route badge |
-| `SightRead: Go to Caller Site` | (right-click a trail node) jump to the line in the caller where it is called |
+| `SightRead: Clear Trail` | discard the recorded call map, planned routes included |
+
+View items carry their own right-click actions: marks — `Edit Note` and an inline delete; segments — `Mark…` / `Mark with Note…` / `Fold Inside` / `Unfold Inside` / `Remove Markers`; trail nodes — `Go to Call Site` and an inline remove.
+
+## ⌨️ Default keybindings
+
+One `⌘K` chord family (`Ctrl+K` on Windows/Linux):
+
+| Keys | Action |
+|---|---|
+| `⌘K 1` … `⌘K 5` | mark the selection yellow / red / green / blue / purple |
+| `⌘K C` | mark the selection, picking a color |
+| `⌘K N` | mark the selection, color + note |
+| `⌘K ⌫` | remove the marks the cursor/selection touches |
+| `⌘K G` | interpret current (AI) |
+| `⌘K L` | choose spotlight level |
+| `⌘K [` / `⌘K ]` | fold / unfold skeleton |
+
+Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows every `⌘K` chord while the editor has focus — rebind Cursor's `⌘K` to use these there.
 
 ## ⚙️ Settings
 
 | Setting | Default | |
 |---|---|---|
-| `sightread.variableTint.enabled` | `true` | occurrence outlining on cursor move |
+| `sightread.palette` | `vivid` | color band for all mark accents (`vivid` / `soft` — same hues, calmer chroma), each with dark- and light-theme values |
+| `sightread.marker.notePosition` | `lineEnd` | mark note at line start or line end |
 | `sightread.spotlight.defaultMode` | `off` | spotlight mode on startup (off / seg+var / seg / fn) |
 | `sightread.spotlight.functionDimOpacity` | `0.15` | dim level outside the function |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | dim level for non-related code in the function |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | dim level for siblings of the cursor's segment |
-| `sightread.entries.languageHints` | `true` | classify no-reference symbols by language syntax (`export`/`pub`, Go capitalization, `_` prefix) |
+| `sightread.entries.codeLens` | `true` | the `» entry — N external refs` CodeLens above entry declarations; click to peek the references |
 | `sightread.entries.showSuspected` | `true` | show "suspected" entries (symbols with no references found) |
-| `sightread.entries.gutterIcons` | `true` | mark entry lines with gutter chevrons (») |
-| `sightread.entries.iconColor` | `#8C8C8C` | chevron color; suspected entries use it at reduced opacity |
-| `sightread.marker.favoriteColor` | `yellow` | color used by `Mark Selection (Favorite Color)` |
-| `sightread.marker.notePosition` | `lineEnd` | marker note at line start or line end |
+| `sightread.entries.languageHints` | `true` | classify no-reference symbols by language syntax (`export`/`pub`, Go capitalization, `_` prefix) |
+| `sightread.variableTint.enabled` | `true` | occurrence outlining on cursor move |
 | `sightread.guide.harness` | `auto` | which coding-agent CLI runs AI Interpret and route planning; `auto` probes `claude` → `codex` → `opencode` → `pi` → `cursor` → `devin` → `aider` → `agy` |
 | `sightread.guide.customHarnesses` | `{}` | add your own harness profiles, or replace builtin ones by name; declare `exploreArgs` to enable route planning |
 | `sightread.guide.model` | *(empty)* | model passed to every harness as `--model`; the value's vocabulary belongs to the chosen CLI; empty = its default model |

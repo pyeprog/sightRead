@@ -3,14 +3,14 @@
   <circle cx="88" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
   <circle cx="106" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
   <circle cx="124" cy="74" r="4" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.18"/>
-  <rect x="112" y="125" width="4" height="74" rx="2" fill="var(--vscode-sightread-guidePrimary,#FF963C)" opacity="0.9"/>
-  <circle cx="93" cy="136" r="11" fill="var(--vscode-sightread-guidePrimary,#FF963C)"/>
+  <rect x="112" y="125" width="4" height="74" rx="2" fill="var(--vscode-sightread-guidePrimary,#FFA05C)" opacity="0.9"/>
+  <circle cx="93" cy="136" r="11" fill="var(--vscode-sightread-guidePrimary,#FFA05C)"/>
   <text x="93" y="140.5" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="var(--vscode-editor-background,#1f1f1f)">1</text>
-  <rect x="112" y="229" width="4" height="48" rx="2" fill="var(--vscode-sightread-guideSetup,#6EAAFF)" opacity="0.9"/>
-  <circle cx="93" cy="240" r="11" fill="var(--vscode-sightread-guideSetup,#6EAAFF)"/>
+  <rect x="112" y="229" width="4" height="48" rx="2" fill="var(--vscode-sightread-guideSetup,#6DC4FF)" opacity="0.9"/>
+  <circle cx="93" cy="240" r="11" fill="var(--vscode-sightread-guideSetup,#6DC4FF)"/>
   <text x="93" y="244.5" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="var(--vscode-editor-background,#1f1f1f)">2</text>
-  <rect x="112" y="307" width="4" height="74" rx="2" fill="var(--vscode-sightread-guideEntity,#FF6EBE)" opacity="0.9"/>
-  <circle cx="93" cy="318" r="11" fill="var(--vscode-sightread-guideEntity,#FF6EBE)"/>
+  <rect x="112" y="307" width="4" height="74" rx="2" fill="var(--vscode-sightread-guideEntity,#FD91D0)" opacity="0.9"/>
+  <circle cx="93" cy="318" r="11" fill="var(--vscode-sightread-guideEntity,#FD91D0)"/>
   <text x="93" y="322.5" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="var(--vscode-editor-background,#1f1f1f)">3</text>
   <rect x="120" y="104" width="300" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.26"/>
   <rect x="120" y="130" width="360" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.5"/>
@@ -24,15 +24,15 @@
   <rect x="148" y="338" width="430" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.5"/>
   <rect x="176" y="364" width="240" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.5"/>
   <rect x="148" y="390" width="180" height="12" rx="6" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.26"/>
-  <rect x="496" y="123" width="88" height="26" rx="13" fill="var(--vscode-sightread-guidePrimary,#FF963C)" opacity="0.14"/>
-  <rect x="510" y="129" width="48" height="4" rx="2" fill="var(--vscode-sightread-guidePrimary,#FF963C)" opacity="0.75"/>
-  <rect x="510" y="137" width="30" height="4" rx="2" fill="var(--vscode-sightread-guidePrimary,#FF963C)" opacity="0.5"/>
-  <rect x="476" y="227" width="88" height="26" rx="13" fill="var(--vscode-sightread-guideSetup,#6EAAFF)" opacity="0.14"/>
-  <rect x="490" y="233" width="48" height="4" rx="2" fill="var(--vscode-sightread-guideSetup,#6EAAFF)" opacity="0.75"/>
-  <rect x="490" y="241" width="30" height="4" rx="2" fill="var(--vscode-sightread-guideSetup,#6EAAFF)" opacity="0.5"/>
-  <rect x="496" y="305" width="88" height="26" rx="13" fill="var(--vscode-sightread-guideEntity,#FF6EBE)" opacity="0.14"/>
-  <rect x="510" y="311" width="48" height="4" rx="2" fill="var(--vscode-sightread-guideEntity,#FF6EBE)" opacity="0.75"/>
-  <rect x="510" y="319" width="30" height="4" rx="2" fill="var(--vscode-sightread-guideEntity,#FF6EBE)" opacity="0.5"/>
-  <path d="M694 68 l6 15 15 6 -15 6 -6 15 -6 -15 -15 -6 15 -6 z" fill="var(--vscode-sightread-guideAccent,#4EC9B0)" opacity="0.95"/>
-  <path d="M663 100 l3.5 9 9 3.5 -9 3.5 -3.5 9 -3.5 -9 -9 -3.5 9 -3.5 z" fill="var(--vscode-sightread-guideAccent,#4EC9B0)" opacity="0.6"/>
+  <rect x="496" y="123" width="88" height="26" rx="13" fill="var(--vscode-sightread-guidePrimary,#FFA05C)" opacity="0.14"/>
+  <rect x="510" y="129" width="48" height="4" rx="2" fill="var(--vscode-sightread-guidePrimary,#FFA05C)" opacity="0.75"/>
+  <rect x="510" y="137" width="30" height="4" rx="2" fill="var(--vscode-sightread-guidePrimary,#FFA05C)" opacity="0.5"/>
+  <rect x="476" y="227" width="88" height="26" rx="13" fill="var(--vscode-sightread-guideSetup,#6DC4FF)" opacity="0.14"/>
+  <rect x="490" y="233" width="48" height="4" rx="2" fill="var(--vscode-sightread-guideSetup,#6DC4FF)" opacity="0.75"/>
+  <rect x="490" y="241" width="30" height="4" rx="2" fill="var(--vscode-sightread-guideSetup,#6DC4FF)" opacity="0.5"/>
+  <rect x="496" y="305" width="88" height="26" rx="13" fill="var(--vscode-sightread-guideEntity,#FD91D0)" opacity="0.14"/>
+  <rect x="510" y="311" width="48" height="4" rx="2" fill="var(--vscode-sightread-guideEntity,#FD91D0)" opacity="0.75"/>
+  <rect x="510" y="319" width="30" height="4" rx="2" fill="var(--vscode-sightread-guideEntity,#FD91D0)" opacity="0.5"/>
+  <path d="M694 68 l6 15 15 6 -15 6 -6 15 -6 -15 -15 -6 15 -6 z" fill="var(--vscode-sightread-guideAccent,#19D9AF)" opacity="0.95"/>
+  <path d="M663 100 l3.5 9 9 3.5 -9 3.5 -3.5 9 -3.5 -9 -9 -3.5 9 -3.5 z" fill="var(--vscode-sightread-guideAccent,#19D9AF)" opacity="0.6"/>
 </svg>

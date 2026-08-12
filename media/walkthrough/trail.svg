@@ -14,7 +14,7 @@
   <circle cx="168" cy="173" r="6.5" fill="none" stroke="var(--vscode-editor-foreground,#cccccc)" stroke-width="2" opacity="0.5"/>
   <rect x="184" y="168" width="150" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.6"/>
   <rect x="202" y="217" width="166" height="29" rx="6" fill="var(--vscode-list-inactiveSelectionBackground,#37373d)"/>
-  <circle cx="216" cy="231" r="6.5" fill="none" stroke="var(--vscode-sightread-guidePrimary,#FF963C)" stroke-width="2" opacity="0.95"/>
+  <circle cx="216" cy="231" r="6.5" fill="none" stroke="var(--vscode-sightread-guidePrimary,#FFA05C)" stroke-width="2" opacity="0.95"/>
   <rect x="232" y="226" width="120" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.9"/>
   <circle cx="216" cy="305" r="6.5" fill="none" stroke="var(--vscode-editor-foreground,#cccccc)" stroke-width="2" opacity="0.5"/>
   <rect x="232" y="300" width="96" height="11" rx="5.5" fill="var(--vscode-editor-foreground,#cccccc)" opacity="0.45"/>
