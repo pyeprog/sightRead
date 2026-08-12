@@ -14,6 +14,7 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread"><img src="https://vsmarketplacebadges.dev/installs-short/WaylongLeon.sightread.svg" alt="Installs"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread&amp;ssr=false#review-details"><img src="https://vsmarketplacebadges.dev/rating-star/WaylongLeon.sightread.svg" alt="Rating"></a>
   <a href="https://open-vsx.org/extension/WaylongLeon/sightread"><img src="https://img.shields.io/open-vsx/v/WaylongLeon/sightread?label=Open%20VSX" alt="Open VSX"></a>
+  <a href="https://open-vsx.org/extension/WaylongLeon/sightread"><img src="https://img.shields.io/open-vsx/dt/WaylongLeon/sightread?label=downloads" alt="Open VSX Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/pyeprog/sightRead" alt="License"></a>
 </p>
 
