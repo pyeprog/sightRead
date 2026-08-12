@@ -50,7 +50,7 @@
   - **自动（逐条语义，2026-08-11 起）**：任何编辑与某条标记的行范围相交 → 删那一条；其余各自平移。AI 步骤同规则——解读不再整份存亡。
   - **手动批量**：删除选区内 / 当前函数内 / 当前文件内（含 AI 步骤）/ 全 workspace（Clear All，带确认）。
 - **过滤**（Filter Marks…）：多选 QuickPick 列当前文件实际出现的 accent key（`color:yellow` / `role:main` / `role:` 未标注）∪ 已隐藏项，颜色排前、角色按语义组排序。隐藏集全局生效：编辑器装饰、Markers 视图、Segments/Trail 的 label 染色一律消失；状态栏 `N hidden` 项兜底提示。
-- 侧边栏 **Markers 视图**：按文件分组、行序混排 guide 节点与 loose 标记；步骤与手动标记同 contextValue（`mark`）——inline 垃圾桶与 Edit Note 对两者一视同仁（步骤的 note 可改可存）。标题栏：Interpret (AI) / Mark with Note / Filter（动态互换）/ Collapse-Expand All（动态互换，仅树），溢出菜单 Clear All。message 行显示过滤态（`N hidden`，N = 真实被隐藏的标记数而非隐藏键数；0 时必须清空 message——message 会压制 viewsWelcome，残留会让清空后的视图回不到空态。整文件被滤空时该文件行一并消失）。
+- 侧边栏 **Markers 视图**：按文件分组、行序混排 guide 节点与 loose 标记；步骤与手动标记同 contextValue（`mark`）——inline 垃圾桶与 Edit Note 对两者一视同仁（步骤的 note 可改可存）。标题栏：Interpret (AI) / Mark with Note / Filter（动态互换）/ Collapse-Expand All（动态互换，仅树），溢出菜单 Clear All。message 行显示过滤态（`⊘ N hidden`，N = 真实被隐藏的标记数而非隐藏键数；0 时必须清空 message——message 会压制 viewsWelcome，残留会让清空后的视图回不到空态。整文件被滤空时该文件行一并消失）。
 - **视图跟随光标**（2026-07-14）：光标落在某标记行内 → Markers 视图选中该条目（loose 优先于步骤；树处于收起态时跳过）。
 
 ### 3.3 变量染色（variable tint）
@@ -104,7 +104,7 @@
 
 - 切段失灵（无段落/光标在段落间隙）→ 自动退化为一档行为。
 - 光标驱动 + 防抖（~120ms）；焦点抖动的保持策略留待原型体感调参。
-- 入口在 **Segments 视图标题栏的 👁 按钮**与**状态栏的 👁 项**（显示当前档位，点击开档位选择器）；当前档位常驻 **Segments 视图的 message 行**（`👁︎ Seg+Var · ↖ in function` / `👁︎ Off · ↖ outside function`——眼睛与状态栏同一意象、带 U+FE0E 压成单色文本字形，↖ 认光标字段；TreeView.message 是纯字符串、不渲染 codicon；几何符号 ◉/○/⊘ 太小与字母难分、彩色 emoji 与 codicon 图标语言相抵，均实测被否；2026-08-11 替代活动栏数字角标——角标离 spotlight 的操作现场太远）。
+- 入口在 **Segments 视图标题栏的 👁 按钮**与**状态栏的 👁 项**（显示当前档位，点击开档位选择器）；当前档位常驻 **Segments 视图的 message 行**（`◎ Seg+Var · ↖ in function` / `◎ Off · ↖ outside function`——◎ 双圈认 spotlight（镜头意象），↖ 认光标字段；TreeView.message 是纯字符串、不渲染 codicon；实心 ◉/○ 与字母难分、彩色 emoji 与 codicon 图标语言相抵、眼睛字形连 U+FE0E 都压不住照样出彩色，均实测被否）。
 - `sightread.spotlight.defaultMode`：启动时应用的默认档位（off / seg+var / seg / fn，默认 off）。
 
 ### 3.6 入口点（entry points，2026-07-09；2026-08-11 视图退役为引擎）
@@ -229,7 +229,7 @@ src/
 这轮 UI 规范化沉淀的横切规则，改任何 UI 面前先对照本节。
 
 - **命令命名**：动词开头祈使式；括号只保留 `(AI)` 一种用途；结尾 `…` 当且仅当会先弹选择/输入（AI 命令除外，`(AI)` 已表明对话流程）；`Remove` = 删指定对象、`Clear` = 清空集合；冒号家族仅用于同一动作的枚举变体（`Spotlight: X`、`Mark Selection: <Color>`）；view item 菜单用短名——上下文已知则省略宾语（`Mark…`、`Fold Inside`）。
-- **View 头部两通道**：description = 在看什么（Segments=函数名、Trail=`Route: <label>`、Markers=空）；message = 状态偏离或图例（Markers=`N hidden`、Trail=徽标图例、Segments=`👁︎ 档位 · ↖ in/outside function`）。message 是纯字符串——不渲染 codicon，图形只用**贴近 codicon 风格的单色字形**（★ ↻ ↙ ↖ 👁︎——emoji 字符必须带 U+FE0E 文本呈现选择符）；小号几何符号（◉ ○ ⊘）与字母难分、彩色 emoji 与图标语言相抵，均实测被否；没有及格字形时宁缺毋滥（Markers 的过滤态就只写字）。message 非空会压制 viewsWelcome，所以"无偏离"时必须置 undefined，不许留空转态文案。
+- **View 头部两通道**：description = 在看什么（Segments=函数名、Trail=`Route: <label>`、Markers=空）；message = 状态偏离或图例（Markers=`⊘ N hidden`、Trail=徽标图例、Segments=`◎ 档位 · ↖ in/outside function`）。message 是纯字符串——不渲染 codicon，图形只用**贴近 codicon 风格的单色线形字形**（★ ↻ ↙ ↖ ◎ ⊘ 一族）；实心小几何符号（◉ ○）与字母难分，emoji 一律不用——眼睛字形带 U+FE0E 在部分字体链下照样渲染成彩色，实测被否。message 非空会压制 viewsWelcome，所以"无偏离"时必须置 undefined，不许留空转态文案。
 - **标题按钮**：排序 AI/主动作 → 新建/标记 → 模式开关 → 过滤 → 树折叠；破坏性动作一律入 "…" 溢出菜单；状态切换用动态互换按钮对（fold/unfold、filter/filter-filled）；图标一律单色 codicon。collapse/expand-all 只给"深度 ≥2 且默认展开"的树（Segments 的 fold 对是其超集且同步编辑器，不叠加原生 collapse-all）。
 - **空态（viewsWelcome）**：两行、零按钮：第一行本体功能，第二行 AI 功能并指向上方按钮。welcome 里 codicon `$(icon)` 可渲染，行首图标必须与所指的标题按钮**同一 codicon**（Markers 第一行 = `$(note)` 即 Mark with Note 按钮、第二行 = `$(sparkle)`、Trail = `$(map)`）；**整行只有一个链接会被渲染成按钮**，故禁止整行链接，行内链接可用。**键位一律不写死**——welcome 无键位替换语法，静态键位在用户改绑后即错；要引导键位就放行内链接 `command:workbench.action.openGlobalKeybindings?["sightread"]` 指向实时键位页。walkthrough 有 `kb(commandId)` 宏（渲染当前实际键位、自动分平台），那边用宏。空态按钮是强引导，只留给明确要引导点击的场景（当前无处够格）；临时性空态走 message 一句话。
 - **快捷键**：统一 `Ctrl/Cmd+K` 前缀 chord 家族：`1–5` 五色直标、`C` 选色、`N` 选色+note、`⌫` 删选区标记、`G` 解读、`L` 聚光灯、`[` `]` 骨架折叠。新键先查 VS Code 默认 chord 表（`K M`/`K R`/`K O` 等已被占）。

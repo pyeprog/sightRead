@@ -835,9 +835,9 @@ suite('SightRead integration', () => {
       guides: [],
     });
     api._test.compositor.setHiddenAccents(new Set(['color:yellow']));
-    assert.strictEqual(view.viewMessage, '1 hidden', 'counts marks, not hidden accent keys');
+    assert.strictEqual(view.viewMessage, '⊘ 1 hidden', 'counts marks, not hidden accent keys');
     api._test.compositor.setHiddenAccents(new Set(['color:yellow', 'color:blue']));
-    assert.strictEqual(view.viewMessage, '2 hidden');
+    assert.strictEqual(view.viewMessage, '⊘ 2 hidden');
     assert.strictEqual(
       view
         .getChildren()
