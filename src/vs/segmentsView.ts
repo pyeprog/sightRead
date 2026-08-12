@@ -188,13 +188,13 @@ export class SegmentsViewFeature
     this.syncMessage();
   }
 
-  /** One message line, two glyph-led fields: ◎ (lens — the spotlight level)
+  /** One message line, two glyph-led fields: ◈ (focus — the spotlight level)
    *  and ↖ (cursor) in/outside function. Codicons don't render in tree-view
-   *  messages (plain string only); the eye emoji ignores U+FE0E on some font
-   *  chains and comes out colored, so the lens ring stands in for it. */
+   *  messages (plain string only); eye glyphs come out as color emoji on some
+   *  font chains, and circle glyphs read as letters — ◈ is unmistakably a glyph. */
   private syncMessage(): void {
     const level = SPOTLIGHT_LEVEL_SHORT[this.spotlightLevel];
-    this.view.message = `◎ ${level} · ↖ ${this.current ? 'in function' : 'outside function'}`;
+    this.view.message = `◈ ${level} · ↖ ${this.current ? 'in function' : 'outside function'}`;
   }
 
   update(
