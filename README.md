@@ -5,8 +5,8 @@
 <h1 align="center">SightRead</h1>
 
 <p align="center">
-  A code-reading enhancer for the vibe-coding era, focused on the micro-scale reading of code.<br>
-  Highlighting, marking, one-key fold/unfold, visual reinforcement of code segments — so you can understand code <b>in place</b>.
+  A code-reading enhancer for the vibe-coding era — from a single block to the whole codebase.<br>
+  Visual reinforcement so you read faster and better, AI guidance that points out what's worth reading, and route-finding that maps the code path from entry to feature.
 </p>
 
 <p align="center">
@@ -15,10 +15,10 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=WaylongLeon.sightread&amp;ssr=false#review-details"><img src="https://vsmarketplacebadges.dev/rating-star/WaylongLeon.sightread.svg" alt="Rating"></a>
   <a href="https://open-vsx.org/extension/WaylongLeon/sightread"><img src="https://img.shields.io/open-vsx/v/WaylongLeon/sightread?label=Open%20VSX" alt="Open VSX"></a>
   <a href="https://open-vsx.org/extension/WaylongLeon/sightread"><img src="https://img.shields.io/open-vsx/dt/WaylongLeon/sightread?label=downloads" alt="Open VSX Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/pyeprog/sightRead" alt="License"></a>
+  <a href="https://github.com/pyeprog/sightRead/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pyeprog/sightRead" alt="License"></a>
 </p>
 
-<p align="center"><b>English</b> | <a href="README-CN.md">简体中文</a></p>
+<p align="center"><b>English</b> | <a href="https://github.com/pyeprog/sightRead/blob/main/README-CN.md">简体中文</a></p>
 
 <p align="center">
   <img src="./media/demo.webp" alt="SightRead">

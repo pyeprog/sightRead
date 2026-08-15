@@ -1,8 +1,8 @@
 {
   "name": "sightread",
   "displayName": "SightRead",
-  "description": "A reading lens for code: highlight, dim, fold and outline function segments to help you understand code in place.",
-  "version": "2.0.0",
+  "description": "A reading lens for code: highlight, fold and dim to read in place; AI signposts and route-finding to navigate the codebase.",
+  "version": "2.0.1",
   "publisher": "WaylongLeon",
   "license": "MIT",
   "icon": "media/icon.png",
