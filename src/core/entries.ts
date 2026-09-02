@@ -113,12 +113,28 @@ const EXPORT_KEYWORD_LANGUAGES = new Set([
 ]);
 
 /**
+ * Languages whose members carry per-line access modifiers. C++ (`private:`
+ * sections) and Ruby (`private` as a section keyword) are deliberately
+ * absent — a declaration line there says nothing about visibility.
+ */
+const ACCESS_MODIFIER_LANGUAGES = new Set([
+  ...EXPORT_KEYWORD_LANGUAGES,
+  'java',
+  'csharp',
+  'kotlin',
+  'swift',
+  'php',
+]);
+
+/**
  * Reads what the declaration syntax says about visibility. Deliberately
  * asymmetric where the syntax is inconclusive: a missing `export` keyword on
  * the declaration line proves nothing (the symbol may be re-exported from an
  * `export { … }` clause elsewhere — see isExportClauseLine), so only positive
  * evidence is returned there. Go capitalization is a language rule, so both
- * directions are safe; explicit keywords outrank the underscore convention.
+ * directions are safe; explicit keywords — `export`/`pub`, and the access
+ * modifiers class members carry — outrank the underscore convention.
+ * `internal`/package-private stay undefined: visible to some outside, not all.
  */
 export function detectDeclaredPublic(
   languageId: string,
@@ -136,6 +152,17 @@ export function detectDeclaredPublic(
   }
   if (languageId === 'rust' && /(^|\s)pub[\s(]/.test(declLine)) {
     return true;
+  }
+  if (ACCESS_MODIFIER_LANGUAGES.has(languageId)) {
+    if (/(^|\s)(private|protected|fileprivate)\s/.test(declLine)) {
+      return false;
+    }
+    if (/(^|\s)(public|open)\s/.test(declLine)) {
+      return true;
+    }
+    if (EXPORT_KEYWORD_LANGUAGES.has(languageId) && name.startsWith('#')) {
+      return false; // ECMAScript private name
+    }
   }
   if (name.startsWith('_')) {
     return false;

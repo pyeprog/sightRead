@@ -114,7 +114,8 @@
   - **CodeLens**：每个入口声明行上方一行 `» entry — 3 external refs`（疑似入口 `» suspected entry — no refs found`），点击 peek 该符号的引用（装饰 gutter 图标做不了 tooltip/点击，是 VS Code 的多年开放缺口，CodeLens 是唯一能挂信息又能点的编辑器内通道）。`sightread.entries.codeLens` 可关。
   - **`Go to Entry Point…` QuickPick**：按需列表，entry 在前、suspected 分区在后，边扫描边流式填充。
   - **Entry Points 视图**（排所有视图最后、`visibility: collapsed` 默认折叠——该默认只对新装生效，之后跟随用户手动状态）：根 = 当前文件入口平铺（与 CodeLens 同排序；suspected 置底，description 标 `suspected — …`，TreeItem label 做不了透明度灰显），末尾一个 **Module 组** = 当前文件所在目录（不递归）中被**目录外**引用的符号 + barrel 再发布名（`isModuleEntry`；suspected 不进模块层——整目录的无引用符号涌入是噪音；只在目录内被兄弟文件引用的也不算——模块层回答"外界从哪进这个目录"）。模块扫描昂贵（逐兄弟文件跑 per-file scan），仅在组**展开时**进行、逐文件流式填充、按 outside refs 降序排；目录内保存后防抖重扫（未变文件命中版本缓存）；文件数上限 40，超出在组行 description 说明。标题栏 $(refresh)，item 单击 reveal、右键 peek references。
-  - 成员懒分类（类方法逐个展开）不随视图回归——三个消费面都只标顶层符号。
+  - **入口类可展开**（1.x 有、2.0.0 砍、2026-09-02 回归）：容器符号（Class / Interface / Struct / Namespace / Module / Object / Enum）的函数类子节点（Function / Method / Constructor / 嵌套 Class / Interface）随扫描一起收进 `members`，但**只在视图展开该类时**才逐个跑引用查询（`classifyMembers`），规则与顶层完全相同——同类兄弟方法的调用落在类的 range 内即 wrapped → 隐藏，外部引用 → 入口，无引用走语法提示 / suspected；展开等分类完再一次性出结果（不流式，免得 hidden 成员闪现），memo 在该版本的 scan 上。分类过的成员在编辑器里同样出 CodeLens——引擎里有证据的符号就有 lens，视图与编辑器才对得上；QuickPick 与 Module 组仍只到顶层（模块层回答"外界从哪进这个目录"，类粒度够用，点进文件后文件层接手）。2.0.0 砍掉的理由是"三个消费面都只标顶层"；回归的理由：类作为入口时读者仍不知道从哪个方法读起，类为主的语言里类粒度的入口列表等于没列。
+  - 语法提示为成员补**访问修饰符**：TS/JS/Java/C#/Kotlin/Swift/PHP 的 `private`/`protected`/`fileprivate` 与 TS/JS `#name` 为声明私有，`public`/`open` 为声明公开，显式关键字压过下划线约定；`internal`/包私有不表态（对一部分外界可见）；C++/Ruby 的分节式 `private` 按行看不出、不做。顶层符号同样受益（Java `public class` 等同 TS `export`）。
 - 每个顶层符号按**引用位置**分类（`executeReferenceProvider`）：
   - 有文件外引用 → **入口**；
   - 有来自**其他符号 body 内**的同文件引用（wrapped）→ 隐藏——存在更抽象的包装者，读者应从包装者读起；

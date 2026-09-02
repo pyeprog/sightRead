@@ -19,6 +19,26 @@ const MAX_CACHED_SCANS = 64;
 /** documents the lens runs on — editors, not output panes or settings */
 const LENS_SELECTOR: vscode.DocumentSelector = [{ scheme: 'file' }, { scheme: 'untitled' }];
 
+/** container symbols whose function-like members are classified lazily on expand */
+const CONTAINER_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Class,
+  vscode.SymbolKind.Interface,
+  vscode.SymbolKind.Struct,
+  vscode.SymbolKind.Namespace,
+  vscode.SymbolKind.Module,
+  vscode.SymbolKind.Object,
+  vscode.SymbolKind.Enum,
+]);
+
+/** the members worth classifying: callable ones, plus nested containers (expandable in turn) */
+const MEMBER_KINDS = new Set<vscode.SymbolKind>([
+  vscode.SymbolKind.Function,
+  vscode.SymbolKind.Method,
+  vscode.SymbolKind.Constructor,
+  vscode.SymbolKind.Class,
+  vscode.SymbolKind.Interface,
+]);
+
 export interface EntrySymbol {
   scan: Scan;
   name: string;
@@ -31,6 +51,14 @@ export interface EntrySymbol {
   alias?: boolean;
   /** declaredPublic came from a `__main__` guard — described as "script entry" */
   scriptEntry?: boolean;
+  /**
+   * function-like children of a container symbol (CONTAINER_KINDS ×
+   * MEMBER_KINDS); empty for leaves. Collected with the scan but classified
+   * only on demand — see EntriesFeature.classifyMembers.
+   */
+  members: EntrySymbol[];
+  /** memoized lazy classification of `members`; dies with the scan version */
+  membersScan?: Promise<void>;
   /** undefined while the reference query is pending */
   evidence?: {
     externalRefs: number;
@@ -71,6 +99,25 @@ function basename(uriString: string): string {
   return path.split('/').pop() ?? path;
 }
 
+const NO_EXPORTED_NAMES: Set<string> = new Set();
+
+/**
+ * The symbols plus every member beneath them that has been classified
+ * (depth-first) — the surface the CodeLens draws on. Members still pending
+ * are left out; they have no verdict to show yet.
+ */
+function withClassifiedMembers(symbols: EntrySymbol[]): EntrySymbol[] {
+  const out: EntrySymbol[] = [];
+  const walk = (list: EntrySymbol[]): void => {
+    for (const s of list) {
+      out.push(s);
+      walk(s.members.filter((m) => m.evidence));
+    }
+  };
+  walk(symbols);
+  return out;
+}
+
 /** parent of the last path segment — the module boundary the entries view groups by */
 export function dirOf(uriString: string): string {
   const i = uriString.lastIndexOf('/');
@@ -103,7 +150,9 @@ export const KIND_ICONS: Partial<Record<vscode.SymbolKind, string>> = {
  * references), the `Go to Entry Point…` quick pick, and the Entry Points
  * sidebar view (entriesView.ts, which adds a module tier on top). Scans are
  * version-cached per document; results stream in as the reference queries
- * complete.
+ * complete. A container's members are classified only when the view expands
+ * it (classifyMembers) — from then on they carry lenses like any other
+ * classified symbol; the quick pick stays top-level.
  */
 export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposable {
   /** refires quick-pick refills and codelens refreshes as evidence streams in */
@@ -144,7 +193,7 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
     if (!scan) {
       return [];
     }
-    return this.visibleSymbols(scan.symbols)
+    return this.visibleSymbols(withClassifiedMembers(scan.symbols))
       .filter((s) => s.evidence)
       .map((s) => {
         const line = s.selectionRange.start.line;
@@ -245,6 +294,14 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
     const range = 'location' in s ? s.location.range : s.range;
     const selectionRange = 'selectionRange' in s ? s.selectionRange : range;
     const declLine = range.start.line < doc.lineCount ? doc.lineAt(range.start.line).text : '';
+    // export clauses / __all__ name top-level symbols only — a member sharing
+    // such a name is a coincidence, so members get an empty set
+    const members =
+      CONTAINER_KINDS.has(s.kind) && 'children' in s
+        ? s.children
+            .filter((c) => MEMBER_KINDS.has(c.kind))
+            .map((c) => this.toEntrySymbol(doc, scan, NO_EXPORTED_NAMES, c))
+        : [];
     return {
       scan,
       name: s.name,
@@ -256,7 +313,35 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
         detectDeclaredPublic(doc.languageId, declLine, s.name) ??
         (exported.has(s.name) ? true : undefined),
       alias: isImportLine(doc.languageId, declLine) || undefined,
+      members,
     };
+  }
+
+  /**
+   * Classifies a container's members on demand — one pooled reference query
+   * each, the same rules as top-level symbols (a call from a sibling method
+   * lands inside the container's range, so it counts as wrapped). Memoized
+   * on the symbol, hence per scan version; a superseded scan stops early and
+   * the view re-asks against the fresh one.
+   */
+  classifyMembers(sym: EntrySymbol): Promise<void> {
+    if (!sym.membersScan) {
+      sym.membersScan = (async (): Promise<void> => {
+        const pending = sym.members.filter((m) => !m.evidence);
+        if (pending.length === 0) {
+          return;
+        }
+        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(sym.scan.uriString));
+        await runPool(pending, MAX_CONCURRENT_REF_QUERIES, async (m) => {
+          if (this.scans.get(sym.scan.uriString) !== sym.scan) {
+            return;
+          }
+          await this.collectEvidence(doc, sym.scan, m);
+        });
+        this.fireSoon();
+      })();
+    }
+    return sym.membersScan;
   }
 
   private async collectEvidence(

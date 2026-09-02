@@ -152,6 +152,32 @@ suite('entries: detectDeclaredPublic', () => {
   test('unknown language, plain name → unknown', () => {
     assert.strictEqual(detectDeclaredPublic('ruby', 'def call', 'call'), undefined);
   });
+
+  test('access modifiers: private/protected → private, public → public, bare member → unknown', () => {
+    assert.strictEqual(detectDeclaredPublic('typescript', '  private helper() {', 'helper'), false);
+    assert.strictEqual(
+      detectDeclaredPublic('typescript', '  protected static hook() {', 'hook'),
+      false,
+    );
+    assert.strictEqual(detectDeclaredPublic('typescript', '  public async run() {', 'run'), true);
+    assert.strictEqual(detectDeclaredPublic('typescript', '  render() {', 'render'), undefined);
+    assert.strictEqual(detectDeclaredPublic('java', '  private void run() {', 'run'), false);
+    assert.strictEqual(
+      detectDeclaredPublic('java', '  public static void main(String[] args) {', 'main'),
+      true,
+    );
+    assert.strictEqual(detectDeclaredPublic('swift', '  fileprivate func tick() {', 'tick'), false);
+    assert.strictEqual(detectDeclaredPublic('swift', '  open func render() {', 'render'), true);
+    // visible to some of the outside, not all — the syntax does not decide
+    assert.strictEqual(detectDeclaredPublic('kotlin', '  internal fun sync() {', 'sync'), undefined);
+  });
+
+  test('modifiers outrank the underscore convention; #names are private; other languages ignore the keywords', () => {
+    assert.strictEqual(detectDeclaredPublic('typescript', '  public _legacy() {', '_legacy'), true);
+    assert.strictEqual(detectDeclaredPublic('javascript', '  #secret() {', '#secret'), false);
+    // a python variable that happens to be called `private`
+    assert.strictEqual(detectDeclaredPublic('python', 'private = 1', 'private'), undefined);
+  });
 });
 
 suite('entries: isExportClauseLine', () => {

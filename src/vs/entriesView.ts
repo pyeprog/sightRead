@@ -34,10 +34,15 @@ function basename(uriString: string): string {
  * root (same ordering as the CodeLens), and a Module group last — symbols
  * anywhere in the file's directory that the outside world enters through
  * (isModuleEntry: referenced from outside the directory, or barrel
- * re-exported). The module tier is expensive — a per-file scan of every
- * sibling — so it only scans while its group is expanded, streams results
- * in file by file, and re-scans on saves in the directory (unchanged
- * siblings hit the version cache).
+ * re-exported). An entry container (class, interface, struct…) expands to
+ * its entry members: the engine classifies them on first expand, and the
+ * children arrive in one go once every member has a verdict — streaming
+ * would flash hidden members before dropping them. The module tier is
+ * expensive — a per-file scan of every sibling — so it only scans while its
+ * group is expanded, streams results in file by file, and re-scans on saves
+ * in the directory (unchanged siblings hit the version cache); its classes
+ * stay leaves — the tier answers "how does the outside enter this
+ * directory", and the file tier takes over once you click through.
  */
 export class EntriesViewFeature
   implements vscode.TreeDataProvider<EntriesNode>, vscode.Disposable
@@ -148,7 +153,12 @@ export class EntriesViewFeature
     }
     const s = node.sym;
     const verdict = this.feature.verdictOf(s);
-    const item = new vscode.TreeItem(s.name, vscode.TreeItemCollapsibleState.None);
+    const item = new vscode.TreeItem(
+      s.name,
+      s.members.length > 0
+        ? vscode.TreeItemCollapsibleState.Collapsed
+        : vscode.TreeItemCollapsibleState.None,
+    );
     item.id = `sym:${s.scan.uriString}:${s.name}:${s.selectionRange.start.line}`;
     item.iconPath = new vscode.ThemeIcon(KIND_ICONS[s.kind] ?? 'symbol-misc');
     const detail = this.feature.describe(s, verdict);
@@ -162,7 +172,10 @@ export class EntriesViewFeature
     return item;
   }
 
-  getChildren(node?: EntriesNode): EntriesNode[] {
+  getChildren(node?: EntriesNode): EntriesNode[] | Promise<EntriesNode[]> {
+    if (node?.kind === 'symbol') {
+      return this.memberChildren(node.sym);
+    }
     if (!node) {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
@@ -188,6 +201,15 @@ export class EntriesViewFeature
       return this.moduleEntries.map((entry) => ({ kind: 'moduleEntry' as const, entry }));
     }
     return [];
+  }
+
+  /** lazy: the expand gesture is what pays for the members' reference queries */
+  private async memberChildren(sym: EntrySymbol): Promise<EntriesNode[]> {
+    await this.feature.classifyMembers(sym);
+    return this.feature
+      .visibleSymbols(sym.members)
+      .filter((m) => m.evidence)
+      .map((m) => ({ kind: 'symbol' as const, sym: m }));
   }
 
   /** directory of the active editor's file; undefined when there is no module (untitled) */

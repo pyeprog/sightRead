@@ -2,6 +2,11 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [2.1.0] — 2026-09-02
+
+- **Entry classes expand to their entry methods** — in the Entry Points view, a class (or interface, struct, namespace, enum) that is itself an entry now carries an expand arrow. Opening it classifies its methods by the same rules as top-level symbols: called from another file → entry; called only by sibling methods or other symbols in the file → hidden; no references anywhere → suspected. The classification runs only when you expand — one reference query per method — and the classified methods then get their `» entry — …` CodeLens in the editor like any other entry. Nested classes expand in turn. The Module group and `Go to Entry Point…` stay top-level.
+- **Language hints read access modifiers** — `private` / `protected` / `fileprivate` (and JavaScript `#names`) mark a symbol declared private, `public` / `open` declared public, in TypeScript/JavaScript, Java, C#, Kotlin, Swift and PHP. Explicit modifiers outrank the leading-underscore convention; `internal` and package-private stay undecided.
+
 ## [2.0.0] — 2026-08-11
 
 A ground-up normalization of every UI surface, a unified data model beneath it, and a per-language segmentation engine. Commands were renamed, some views and settings removed — hence the major version. Existing marks and guides migrate automatically on first activation.
