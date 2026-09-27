@@ -162,7 +162,8 @@ function groupAccs(units: Unit[], opts: SegmentationOptions): Acc[] {
   let cur: Acc | null = null;
   for (const u of units) {
     const len = u.end - u.start + 1;
-    const isBlock = u.hasBody && len >= opts.minBlockLines && !u.leading;
+    // Keyword blocks carry structure even when their body is only one line.
+    const isBlock = u.hasBody && (u.kwLead || len >= opts.minBlockLines) && !u.leading;
     // `if (!x) return;`, `return y;` — a keyword statement with no block of its
     // own. It stands alone so that `classify` names it after its own line.
     const sealed = u.kwLead && !u.hasBody && !u.leading;

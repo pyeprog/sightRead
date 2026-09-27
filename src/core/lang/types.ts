@@ -27,7 +27,7 @@ export interface Summary {
 }
 
 export interface SegmentationOptions {
-  /** a block unit shorter than this merges with neighbours like plain lines */
+  /** non-keyword block units shorter than this merge with neighbouring statements */
   minBlockLines: number;
   maxNameLength: number;
   /** recursion depth limit */

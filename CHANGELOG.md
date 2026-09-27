@@ -2,6 +2,10 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [2.1.2] — 2026-09-27
+
+- **Keep short keyword blocks separate** — short branches and loops now keep their own segments and child nodes instead of merging into neighbouring statements. In Python, an `if` with a single `return` stays separate from the assignment before it. Ordinary statement grouping and branch chains are preserved.
+
 ## [2.1.1] — 2026-09-27
 
 - **Eye icons show current state** — Entry Points uses an open eye while labels are visible and a closed eye while hidden. The Segments title button now follows the spotlight on/off state, matching its status-bar icon.

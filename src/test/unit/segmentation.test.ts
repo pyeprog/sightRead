@@ -196,11 +196,63 @@ suite('segmentation: structural naming', () => {
     ]);
   });
 
-  test('small blocks merge with neighbours into a statement segment', () => {
+  test('short keyword blocks stay separate from neighbouring statements', () => {
     const t = tree('a()', 'if x:', '    b()', 'c()');
-    assert.strictEqual(t.length, 1);
-    assert.deepStrictEqual([t[0].startLine, t[0].endLine], [0, 3]);
-    assert.strictEqual(t[0].name, 'a() c()');
+    assert.deepStrictEqual(shape(t), [
+      [0, 0, 'call', 'a()', []],
+      [1, 2, 'branch', 'if', [[2, 2, 'call', 'b()', []]]],
+      [3, 3, 'call', 'c()', []],
+    ]);
+  });
+
+  test('python cache guard keeps its condition and return child', () => {
+    const t = segmentTree(
+      [
+        '    path = Path("./data/mnist")',
+        '    if path.exists():',
+        '        return cast(DatasetDict, load_from_disk(path))',
+      ],
+      DEFAULT_OPTIONS,
+      syntaxFor('python'),
+    );
+    assert.deepStrictEqual(shape(t), [
+      [0, 0, 'assignment', 'path=Path(...)', []],
+      [1, 2, 'branch', 'if', [[2, 2, 'flow', 'return', []]]],
+    ]);
+    assert.strictEqual(t[1].detail, 'path.exists()');
+    assert.deepStrictEqual(t[1].headerLines, [1]);
+  });
+
+  test('python short loops recurse and branch chains stay together regardless of threshold', () => {
+    const t = segmentTree(
+      ['a()', 'for x in xs:', '    use(x)', 'if x:', '    b()', 'else:', '    c()', 'd()'],
+      { ...DEFAULT_OPTIONS, minBlockLines: 10 },
+      syntaxFor('python'),
+    );
+    assert.deepStrictEqual(shape(t), [
+      [0, 0, 'call', 'a()', []],
+      [1, 2, 'loop', 'for', [[2, 2, 'call', 'use(...)', []]]],
+      [3, 6, 'branch', 'if/else', [[4, 4, 'call', 'b()', []], [6, 6, 'call', 'c()', []]]],
+      [7, 7, 'call', 'd()', []],
+    ]);
+    assert.deepStrictEqual(t[2].headerLines, [3, 5]);
+  });
+
+  test('comments bind to short keyword blocks', () => {
+    const t = tree('# guard', 'if x:', '    return x', 'use(x)');
+    assert.deepStrictEqual(shape(t), [
+      [0, 2, 'branch', 'if', [[2, 2, 'flow', 'return', []]]],
+      [3, 3, 'call', 'use(...)', []],
+    ]);
+  });
+
+  test('short multiline calls still merge with neighbouring statements', () => {
+    const t = segmentTree(
+      ['a()', 'consume(', '    x)', 'b()'],
+      DEFAULT_OPTIONS,
+      syntaxFor('python'),
+    );
+    assert.deepStrictEqual(shape(t), [[0, 3, 'call', 'a() consume(...) b()', []]]);
   });
 
   test('a bodyless keyword statement does not swallow the statements after it', () => {
