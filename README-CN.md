@@ -127,7 +127,7 @@ Cursor 用户注意：Cursor 把裸 `⌘K` 绑给了 inline edit，编辑器有�
 | `sightread.spotlight.functionDimOpacity` | `0.15` | 函数之外代码的压暗程度 |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | 函数内无关代码的压暗程度 |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | 光标所在段的兄弟段的压暗程度 |
-| `sightread.entries.codeLens` | `true` | 入口声明上方的 `» entry — N external refs` CodeLens；点击 peek 引用 |
+| `sightread.entries.codeLens` | `true` | 入口声明上方的 CodeLens；通过 Entry Points 标题栏最左侧按钮或 `SightRead: Toggle Entry Point Labels` 随时切换 |
 | `sightread.entries.showSuspected` | `true` | 显示"疑似"入口（找不到任何引用的符号） |
 | `sightread.entries.languageHints` | `true` | 用语言语法（`export`/`pub`、Go 大小写、`_` 前缀）细分无引用符号 |
 | `sightread.variableTint.enabled` | `true` | 光标移动时描边符号的所有出现 |

@@ -968,6 +968,41 @@ suite('SightRead integration', () => {
       ],
     );
     assert.strictEqual(lenses[0].command?.command, 'sightread.peekEntryReferences');
+
+    const cfg = vscode.workspace.getConfiguration('sightread');
+    const setting = cfg.inspect<boolean>('entries.codeLens');
+    const target = setting?.workspaceValue !== undefined
+      ? vscode.ConfigurationTarget.Workspace
+      : vscode.ConfigurationTarget.Global;
+    const original = target === vscode.ConfigurationTarget.Workspace
+      ? setting?.workspaceValue : setting?.globalValue;
+    let changes = 0;
+    const subscription = feature.onDidChangeCodeLenses(() => changes++);
+    try {
+      await vscode.commands.executeCommand('sightread.toggleEntryPointLabels');
+      assert.deepStrictEqual(feature.provideCodeLenses(doc), []);
+      const roots = await api._test.entriesView.getChildren();
+      assert.deepStrictEqual(
+        roots.filter((n) => n.kind === 'symbol').map((n) => n.sym.name), names,
+        'hiding editor labels keeps sidebar entries available',
+      );
+      await vscode.commands.executeCommand('sightread.toggleEntryPointLabels');
+      assert.strictEqual(feature.provideCodeLenses(doc).length, lenses.length);
+      await vscode.commands.executeCommand('sightread.hideEntryPointLabels');
+      await vscode.commands.executeCommand('sightread.hideEntryPointLabels');
+      assert.deepStrictEqual(feature.provideCodeLenses(doc), []);
+      await vscode.commands.executeCommand('sightread.showEntryPointLabels');
+      assert.strictEqual(feature.provideCodeLenses(doc).length, lenses.length);
+      await cfg.update('entries.codeLens', false, target);
+      assert.deepStrictEqual(feature.provideCodeLenses(doc), []);
+      for (let i = 0; i < 20 && changes === 0; i++) {
+        await sleep(50);
+      }
+      assert.ok(changes > 0, 'configuration changes refresh CodeLens consumers');
+    } finally {
+      subscription.dispose();
+      await cfg.update('entries.codeLens', original, target);
+    }
   });
 
   /** On-disk fixture for the entries view: mod/a.js exports foo (referenced

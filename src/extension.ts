@@ -73,6 +73,7 @@ export function activate(context: vscode.ExtensionContext): unknown {
   const syncSpotlightUi = (): void => {
     const level = spotlight.currentLevel;
     segmentsView.setSpotlightLevel(level);
+    void vscode.commands.executeCommand('setContext', 'sightread.spotlightActive', level !== 0);
     spotlightStatus.text = `$(${level === 0 ? 'eye-closed' : 'eye'}) ${SPOTLIGHT_LEVEL_NAMES[level]}`;
   };
   spotlightStatus.show();
@@ -214,6 +215,9 @@ export function activate(context: vscode.ExtensionContext): unknown {
       qp.onDidHide(() => qp.dispose());
       qp.show();
     }),
+    vscode.commands.registerCommand('sightread.spotlightSelectInactive', () =>
+      vscode.commands.executeCommand('sightread.spotlightSelect'),
+    ),
     vscode.commands.registerCommand('sightread.spotlightOff', () => setSpotlight(0)),
     vscode.commands.registerCommand('sightread.spotlightFunction', () => setSpotlight(1)),
     vscode.commands.registerCommand('sightread.spotlightSegment', () => setSpotlight(2)),

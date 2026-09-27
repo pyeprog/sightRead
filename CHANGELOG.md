@@ -2,6 +2,11 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [2.1.1] — 2026-09-27
+
+- **Eye icons show current state** — Entry Points uses an open eye while labels are visible and a closed eye while hidden. The Segments title button now follows the spotlight on/off state, matching its status-bar icon.
+- **Toggle entry-point labels** — use `SightRead: Toggle Entry Point Labels` or the leftmost eye button in the Entry Points title bar to show/hide editor labels instantly. The sidebar stays available; the button follows changes to `sightread.entries.codeLens`.
+
 ## [2.1.0] — 2026-09-02
 
 - **Entry classes expand to their entry methods** — in the Entry Points view, a class (or interface, struct, namespace, enum) that is itself an entry now carries an expand arrow. Opening it classifies its methods by the same rules as top-level symbols: called from another file → entry; called only by sibling methods or other symbols in the file → hidden; no references anywhere → suspected. The classification runs only when you expand — one reference query per method — and the classified methods then get their `» entry — …` CodeLens in the editor like any other entry. Nested classes expand in turn. The Module group and `Go to Entry Point…` stay top-level.

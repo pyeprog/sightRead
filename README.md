@@ -126,7 +126,7 @@ Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows ev
 | `sightread.spotlight.functionDimOpacity` | `0.15` | dim level outside the function |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | dim level for non-related code in the function |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | dim level for siblings of the cursor's segment |
-| `sightread.entries.codeLens` | `true` | the `» entry — N external refs` CodeLens above entry declarations; click to peek the references |
+| `sightread.entries.codeLens` | `true` | the `» entry — N external refs` CodeLens above entry declarations; toggle with the leftmost Entry Points title button or `SightRead: Toggle Entry Point Labels` |
 | `sightread.entries.showSuspected` | `true` | show "suspected" entries (symbols with no references found) |
 | `sightread.entries.languageHints` | `true` | classify no-reference symbols by language syntax (`export`/`pub`, Go capitalization, `_` prefix) |
 | `sightread.variableTint.enabled` | `true` | occurrence outlining on cursor move |

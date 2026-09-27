@@ -166,6 +166,21 @@ export class EntriesFeature implements vscode.CodeLensProvider, vscode.Disposabl
   constructor() {
     this.subscriptions.push(
       vscode.languages.registerCodeLensProvider(LENS_SELECTOR, this),
+      ...([
+        ['sightread.toggleEntryPointLabels', undefined],
+        ['sightread.showEntryPointLabels', true],
+        ['sightread.hideEntryPointLabels', false],
+      ] satisfies [string, boolean | undefined][]).map(([command, enabled]) =>
+        vscode.commands.registerCommand(command, async () => {
+          const cfg = vscode.workspace.getConfiguration('sightread');
+          const setting = cfg.inspect<boolean>('entries.codeLens');
+          // Preserve an existing workspace override; otherwise use the user preference.
+          const target = setting?.workspaceValue !== undefined
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+          await cfg.update('entries.codeLens', enabled ?? !cfg.get('entries.codeLens', true), target);
+        }),
+      ),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('sightread.entries')) {
           this.fireSoon();
