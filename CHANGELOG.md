@@ -2,6 +2,12 @@
 
 All notable changes to the SightRead extension are documented in this file.
 
+## [2.2.0] — 2026-10-16
+
+- **Composable Spotlight effects** — replace the fixed levels with a multi-select QuickPick. Choose whether to dim code outside the current function and other segments inside it, then keep outside function declarations, inner function declarations, related function declarations, or symbol-related segments bright. Declaration options keep the declaration lines lit while function bodies follow the dimming rules; bright exceptions combine.
+- **Independent master switch and saved choices** — enable or disable Spotlight in the picker or with the status-bar eye without clearing the selected effects. Choices and enabled state persist per workspace. Enter saves and applies; Escape discards picker changes. `⌘K L` / `Ctrl+K L` opens the configuration picker. Existing direct level commands remain available as presets.
+- **Clearer Spotlight state** — the status bar shows Spotlight On/Off; the Segments message adds whether the cursor is inside a function. View selected effects in the QuickPick. Related-symbol effects work independently of the variable-tint setting.
+
 ## [2.1.2] — 2026-09-27
 
 - **Keep short keyword blocks separate** — short branches and loops now keep their own segments and child nodes instead of merging into neighbouring statements. In Python, an `if` with a single `return` stays separate from the assignment before it. Ordinary statement grouping and branch chains are preserved.

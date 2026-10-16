@@ -58,11 +58,7 @@ Orthogonal features, each providing a different kind of visual assistance (see d
 - 🦴 **Skeleton fold** — quickly fold and unfold the existing blocks inside a function. When reading a function, fold everything first to see its large structure, then expand the blocks you're interested in and read them closely.
 - 🖍️ **Highlighter (marks)** — for the hard-to-read, tricky blocks: swipe a highlighter mark over them first (`⌘K 1`–`5` drop one of the five colors directly), optionally with a short note saying what the block does. Manual marks and AI guide steps are one model: the same rendering, the same `Filter Marks…` (hide any color or role everywhere at once), the same edit rule — an edit deletes exactly the marks it touches, the rest shift along. Two color bands to choose from (`sightread.palette`: vivid / soft), each with separate dark- and light-theme values.
 - 🎯 **Variable tint** — within the context of the enclosing function, outlines the symbol under the cursor, so you can see at a glance where this variable was created and where it is used.
-- 🔦 **Spotlight** — removes the visual noise of other functions and unrelated blocks. Click the 👁 item in the status bar and pick a level.
-  1. **Function** — only the current function; other functions are dimmed
-  2. **Segment** — only the current block; other blocks are dimmed
-  3. **Segment+Var** — the current block plus the related blocks; everything else is dimmed — the mode I use the most.
-  4. **Off** — spotlight off, the default mode.
+- 🔦 **Spotlight** — toggle with the status-bar eye. Press `⌘K L` or open `SightRead: Spotlight: Configure Effects…` (also in the Segments title bar) for a multi-select QuickPick: a master switch, two dimming targets (outside the function / other segments inside it), and four bright exceptions (other function declarations / inner function declarations / related segments / related declarations). Exceptions combine. Enter saves and applies; Escape cancels the draft. Choices and enabled state persist per workspace; switching off preserves the combination.
 - 🧩 **Auto segmentation** — splits a function into a **recursive structure** by blank lines + keywords, so the Segments panel can show the function's large structure; click a node to jump to that block. Next to each node, a dimmed detail text shows its condensed condition or expression (hover for the full header line). The panel follows your cursor — the segment under it gets selected, and with the spotlight on, unrelated segments dim in the panel just like in the editor.
 - 🚪 **Entry points** — read a file starting from where the outside world calls in, instead of from line one. A CodeLens above each entry declaration reads `» entry — 3 external refs`; click it to peek those references. Each top-level symbol is classified by where its references live: referenced from another file → entry; referenced only within the file → no lens; no references anywhere → a dimmed `suspected entry` (framework hooks like `activate`, route handlers — or dead code). `Go to Entry Point…` lists every entry of the file on demand, and the **Entry Points** view (collapsed by default) keeps them on screen for code review — an entry class expands to the methods the outside world calls, and a **Module** group lists the ways into the whole directory: every symbol referenced from outside it, plus barrel re-exports.
 - 🧭 **Trail** — a sidebar view that turns your navigation into a call map, while it is open: jump to a definition and the callee appears under the function you came from; jump to a reference and the caller becomes the parent. No project scan — only the structural jumps you actually make are recorded (each one verified against the definition provider), so the structure emerges as you read. Children are ordered by call site and show the line in the caller where they are called (`↙ L88`, right-click → `Go to Call Site` to jump there); nodes whose body carries a highlighter mark are tinted in the mark's color, and the view follows your cursor — the node you are inside gets selected. The trail lives in memory only and is discarded when the window closes.
@@ -91,8 +87,8 @@ All commands live under the `SightRead:` prefix in the Command Palette. The ever
 | `SightRead: Interpret Current (AI)` | AI-annotate the function / class / file at the cursor with role-tagged signposts |
 | `SightRead: Find Logic Routes (AI)` | type a reading goal; the agent explores the repo and seeds a planned (dim) route into the Trail view |
 | `SightRead: Trace Back to Entries (AI)` | list every entry that reaches the code under the cursor, as chains in the Trail view |
-| `SightRead: Spotlight: Choose Level…` | pick the level from a list, same as clicking the 👁 status-bar item |
-| `SightRead: Spotlight: Off` / `: Function` / `: Segment` / `: Segment + Variables` | jump straight to a level |
+| `SightRead: Spotlight: Configure Effects…` | configure effects and the master switch in a multi-select picker |
+| `SightRead: Spotlight: Off` / `: Function` / `: Segment` / `: Segment + Variables` | apply legacy presets; Off preserves effect choices |
 | `SightRead: Toggle Variable Tint` | turn occurrence outlining on or off |
 | `SightRead: Go to Segment…` | QuickPick over the current function's segments |
 | `SightRead: Go to Entry Point…` | QuickPick over the file's entry points |
@@ -111,7 +107,7 @@ One `⌘K` chord family (`Ctrl+K` on Windows/Linux):
 | `⌘K N` | mark the selection, color + note |
 | `⌘K ⌫` | remove the marks the cursor/selection touches |
 | `⌘K G` | interpret current (AI) |
-| `⌘K L` | choose spotlight level |
+| `⌘K L` | configure Spotlight effects |
 | `⌘K [` / `⌘K ]` | fold / unfold skeleton |
 
 Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows every `⌘K` chord while the editor has focus — rebind Cursor's `⌘K` to use these there.
@@ -122,7 +118,7 @@ Note for Cursor users: Cursor binds bare `⌘K` to inline edit, which shadows ev
 |---|---|---|
 | `sightread.palette` | `vivid` | color band for all mark accents (`vivid` / `soft` — same hues, calmer chroma), each with dark- and light-theme values |
 | `sightread.marker.notePosition` | `lineEnd` | mark note at line start or line end |
-| `sightread.spotlight.defaultMode` | `off` | spotlight mode on startup (off / seg+var / seg / fn) |
+| `sightread.spotlight.defaultMode` | `off` | initial preset before workspace choices are saved (off / seg+var / seg / fn) |
 | `sightread.spotlight.functionDimOpacity` | `0.15` | dim level outside the function |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | dim level for non-related code in the function |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | dim level for siblings of the cursor's segment |

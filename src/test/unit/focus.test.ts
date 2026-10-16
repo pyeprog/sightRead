@@ -1,6 +1,9 @@
 import * as assert from 'assert';
 import {
   computeFocus,
+  computeSpotlightFocus,
+  spotlightPreset,
+  SpotlightOptions,
   intersectsAny,
   mergeLineRanges,
   pathToLine,
@@ -264,5 +267,86 @@ suite('focus: related islands outside the function (nested local functions)', ()
       ],
       light: [{ start: 16, end: 24 }],
     });
+  });
+});
+
+suite('spotlight effect combinations', () => {
+  const fn = { start: 10, end: 30 };
+  const tree = [n(11, 15), n(17, 21), n(23, 28)];
+  const declarations = [
+    { range: { start: 0, end: 8 }, header: { start: 0, end: 0 } },
+    { range: { start: 32, end: 40 }, header: { start: 32, end: 32 } },
+    { range: { start: 23, end: 28 }, header: { start: 23, end: 23 } },
+  ];
+  const focus = (options: SpotlightOptions) => computeSpotlightFocus(
+    options, fn, tree, 12, [18, 35], declarations, 45,
+  );
+
+  test('all effect combinations respect dimming targets and the union of bright exceptions', () => {
+    for (let bits = 0; bits < 64; bits++) {
+      const options: SpotlightOptions = {
+        enabled: true,
+        dimOutsideFunction: Boolean(bits & 1),
+        dimUnrelatedSegments: Boolean(bits & 2),
+        keepFunctionDeclarations: Boolean(bits & 4),
+        keepInnerFunctionDeclarations: Boolean(bits & 32),
+        keepRelatedSegments: Boolean(bits & 8),
+        keepRelatedFunctionDeclarations: Boolean(bits & 16),
+      };
+      const tiers = focus(options);
+      const lit = (line: number) => intersectsAny({ start: line, end: line }, tiers.lit);
+      const check = (line: number, expected: boolean) =>
+        assert.strictEqual(lit(line), expected, `combination ${bits}, line ${line}`);
+      check(12, true);
+      check(18, !options.dimUnrelatedSegments || options.keepRelatedSegments);
+      check(25, !options.dimUnrelatedSegments);
+      check(0, !options.dimOutsideFunction || options.keepFunctionDeclarations);
+      check(32, !options.dimOutsideFunction || options.keepFunctionDeclarations || options.keepRelatedFunctionDeclarations);
+      check(23, !options.dimUnrelatedSegments || options.keepInnerFunctionDeclarations);
+      check(35, !options.dimOutsideFunction);
+      assert.ok(!tiers.light.some((range) => intersectsAny(range, tiers.lit)));
+      assert.deepStrictEqual(focus({ ...options, enabled: false }), { lit: [], light: [] });
+    }
+  });
+
+  test('outside declaration exceptions do not light nested declarations inside the current function', () => {
+    const tiers = focus({ ...spotlightPreset(2), keepFunctionDeclarations: true });
+    assert.ok(!intersectsAny({ start: 23, end: 23 }, tiers.lit));
+  });
+
+  test('inner declarations stay bright without lighting outside declarations or nested bodies', () => {
+    for (const dimOutsideFunction of [true, false]) {
+      const tiers = focus({ ...spotlightPreset(2), dimOutsideFunction, keepInnerFunctionDeclarations: true });
+      assert.ok(intersectsAny({ start: 23, end: 23 }, tiers.lit));
+      assert.ok(!intersectsAny({ start: 25, end: 25 }, tiers.lit));
+      assert.strictEqual(intersectsAny({ start: 0, end: 0 }, tiers.lit), !dimOutsideFunction);
+      assert.ok(!tiers.light.some((range) => intersectsAny(range, tiers.lit)));
+    }
+  });
+
+  test('related declarations include nested functions independently of the inner toggle', () => {
+    const tiers = computeSpotlightFocus({ ...spotlightPreset(2), keepRelatedFunctionDeclarations: true },
+      fn, tree, 12, [25], declarations, 45);
+    assert.ok(intersectsAny({ start: 23, end: 23 }, tiers.lit));
+    assert.ok(!intersectsAny({ start: 25, end: 25 }, tiers.lit));
+    assert.ok(!intersectsAny({ start: 0, end: 0 }, tiers.lit));
+  });
+
+  test('outside declarations include the enclosing function header', () => {
+    const tiers = computeSpotlightFocus({ ...spotlightPreset(2), keepFunctionDeclarations: true },
+      fn, tree, 12, [], [{ range: { start: 0, end: 45 }, header: { start: 0, end: 0 } }], 45);
+    assert.ok(intersectsAny({ start: 0, end: 0 }, tiers.lit));
+  });
+
+  test('related outer paragraphs remain bright even without inside dimming', () => {
+    const tiers = computeSpotlightFocus({ ...spotlightPreset(1), keepRelatedSegments: true },
+      fn, tree, 12, [35], declarations, 45, [n(32, 40)]);
+    assert.ok(intersectsAny({ start: 35, end: 35 }, tiers.lit));
+  });
+
+  test('missing segment data preserves the function and requested declaration context', () => {
+    const tiers = computeSpotlightFocus({ ...spotlightPreset(2), keepRelatedFunctionDeclarations: true },
+      fn, [], 12, [35], declarations, 45);
+    assert.deepStrictEqual(tiers.lit, [fn, { start: 32, end: 32 }]);
   });
 });

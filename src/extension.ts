@@ -16,31 +16,19 @@ import {
   registerSegmentMarkCommands,
 } from './vs/segmentsView';
 import { registerSkeletonFoldCommands } from './vs/skeletonFold';
-import { SpotlightController } from './vs/spotlight';
+import { SpotlightController, pickSpotlightOptions } from './vs/spotlight';
 import { TrailViewFeature, registerTrailCommands } from './vs/trailView';
 import { computeTint } from './vs/variableTint';
-import { findEnclosingFunctions } from './vs/symbols';
-import { SPOTLIGHT_LEVEL_NAMES, SpotlightLevel } from './core/focus';
+import { findFunctionDeclarations, findEnclosingFunctions } from './vs/symbols';
+import { SpotlightLevel, SpotlightOptions, spotlightLabel } from './core/focus';
 
 const REFRESH_DEBOUNCE_MS = 120;
-
-/** One QuickPick row per spotlight level, in order of increasing focus. */
-const SPOTLIGHT_PICK_ITEMS: { level: SpotlightLevel; label: string; description: string }[] = [
-  { level: 0, label: 'Off', description: 'no dimming' },
-  { level: 1, label: 'Function', description: 'current function stays lit' },
-  { level: 2, label: 'Segment', description: 'only the cursor block stays lit' },
-  {
-    level: 3,
-    label: 'Segment + Variables (recommended)',
-    description: 'cursor block + related blocks stay lit',
-  },
-];
 
 export function activate(context: vscode.ExtensionContext): unknown {
   const repo = new MarkRepository(context.workspaceState);
   const segmentCache = new SegmentCache();
   const compositor = new Compositor((uri) => repo.get(uri));
-  const spotlight = new SpotlightController();
+  const spotlight = new SpotlightController(context.workspaceState);
   const markersView = new MarkersViewFeature(repo, compositor);
   const segmentsView = new SegmentsViewFeature(repo, compositor);
   const entries = new EntriesFeature();
@@ -67,14 +55,14 @@ export function activate(context: vscode.ExtensionContext): unknown {
     100,
   );
   spotlightStatus.name = 'SightRead Spotlight';
-  spotlightStatus.command = 'sightread.spotlightSelect';
-  spotlightStatus.tooltip = 'SightRead spotlight — click to choose a level';
+  spotlightStatus.command = 'sightread.spotlightToggle';
   context.subscriptions.push(spotlightStatus);
   const syncSpotlightUi = (): void => {
-    const level = spotlight.currentLevel;
-    segmentsView.setSpotlightLevel(level);
-    void vscode.commands.executeCommand('setContext', 'sightread.spotlightActive', level !== 0);
-    spotlightStatus.text = `$(${level === 0 ? 'eye-closed' : 'eye'}) ${SPOTLIGHT_LEVEL_NAMES[level]}`;
+    const options = spotlight.currentOptions;
+    segmentsView.setSpotlightOptions(options);
+    void vscode.commands.executeCommand('setContext', 'sightread.spotlightActive', options.enabled);
+    spotlightStatus.text = `$(${options.enabled ? 'eye' : 'eye-closed'}) ${spotlightLabel(options)}`;
+    spotlightStatus.tooltip = 'Click to turn Spotlight on/off · ⌘K L / Ctrl+K L to configure';
   };
   spotlightStatus.show();
   // an active filter hides marks everywhere — without a global signal, a
@@ -136,10 +124,19 @@ export function activate(context: vscode.ExtensionContext): unknown {
     const tintEnabled = vscode.workspace
       .getConfiguration('sightread')
       .get('variableTint.enabled', true);
-    const tint =
-      tintEnabled && editor.selection.isEmpty
-        ? await computeTint(doc, pos, outermost ?? fn)
-        : [];
+    const options = spotlight.currentOptions;
+    const needsRelated = options.enabled && (options.keepRelatedSegments || options.keepRelatedFunctionDeclarations);
+    // Query document-wide semantic occurrences once, then clip tint to its original scope.
+    const scope = outermost ?? fn;
+    let occurrences = (tintEnabled || needsRelated) && editor.selection.isEmpty
+      ? await computeTint(doc, pos, needsRelated ? undefined : scope) : [];
+    if (needsRelated && occurrences.length === 0 && editor.selection.isEmpty) {
+      occurrences = await computeTint(doc, pos, scope);
+    }
+    const tint = tintEnabled ? occurrences.filter((item) => !scope || scope.range.contains(item.range.start)) : [];
+    const declarations = options.enabled && (options.keepInnerFunctionDeclarations || options.keepRelatedFunctionDeclarations ||
+      (options.dimOutsideFunction && options.keepFunctionDeclarations))
+      ? await findFunctionDeclarations(doc) : [];
     if (token !== pipelineToken) {
       return;
     }
@@ -153,8 +150,10 @@ export function activate(context: vscode.ExtensionContext): unknown {
       fn,
       segments,
       pos.line,
-      tint.map((t) => t.range.start.line),
+      occurrences.map((t) => t.range.start.line),
       outerTree,
+      declarations,
+      doc.lineCount - 1,
     );
     segmentsView.update(doc, fn, segments, pos.line, spot);
     void segmentsView.revealCursor();
@@ -185,39 +184,25 @@ export function activate(context: vscode.ExtensionContext): unknown {
   registerSegmentFoldCommands(context);
   registerEntryCommands(context, entries);
   registerTrailCommands(context, trailView);
-  const setSpotlight = (level: SpotlightLevel): void => {
-    spotlight.setLevel(level);
+  const applySpotlight = async (options: SpotlightOptions): Promise<void> => {
+    await spotlight.setOptions(options);
+    syncSpotlightUi();
+    scheduleRefresh();
+  };
+  const setSpotlight = async (level: SpotlightLevel): Promise<void> => {
+    await spotlight.setLevel(level);
     syncSpotlightUi();
     scheduleRefresh();
   };
   context.subscriptions.push(
-    vscode.commands.registerCommand('sightread.spotlightSelect', () => {
-      type SpotlightPick = vscode.QuickPickItem & { level: SpotlightLevel };
-      const qp = vscode.window.createQuickPick<SpotlightPick>();
-      qp.title = 'Spotlight Level';
-      qp.placeholder = 'What stays lit — everything else is dimmed';
-      qp.items = SPOTLIGHT_PICK_ITEMS.map((item) => ({
-        ...item,
-        description:
-          item.level === spotlight.currentLevel
-            ? `${item.description} — current`
-            : item.description,
-      }));
-      // open with the cursor on the current level, so Enter is a no-op keep
-      qp.activeItems = qp.items.filter((item) => item.level === spotlight.currentLevel);
-      qp.onDidAccept(() => {
-        const picked = qp.selectedItems[0];
-        qp.hide();
-        if (picked) {
-          setSpotlight(picked.level);
-        }
-      });
-      qp.onDidHide(() => qp.dispose());
-      qp.show();
+    vscode.commands.registerCommand('sightread.spotlightSelect', async () => {
+      const options = await pickSpotlightOptions(spotlight.currentOptions);
+      if (options) { await applySpotlight(options); }
     }),
     vscode.commands.registerCommand('sightread.spotlightSelectInactive', () =>
-      vscode.commands.executeCommand('sightread.spotlightSelect'),
-    ),
+      vscode.commands.executeCommand('sightread.spotlightSelect')),
+    vscode.commands.registerCommand('sightread.spotlightToggle', () =>
+      applySpotlight({ ...spotlight.currentOptions, enabled: !spotlight.currentOptions.enabled })),
     vscode.commands.registerCommand('sightread.spotlightOff', () => setSpotlight(0)),
     vscode.commands.registerCommand('sightread.spotlightFunction', () => setSpotlight(1)),
     vscode.commands.registerCommand('sightread.spotlightSegment', () => setSpotlight(2)),

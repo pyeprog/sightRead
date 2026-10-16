@@ -11,10 +11,14 @@ import type { EntriesNode, EntriesViewFeature, ModuleEntry } from '../../vs/entr
 import { type MarkRepository, migrateLegacyStorage } from '../../vs/markRepository';
 import type { MarkersViewFeature } from '../../vs/markersView';
 import type { SegmentsViewFeature } from '../../vs/segmentsView';
+import type { SpotlightController } from '../../vs/spotlight';
+import { findFunctionDeclarations } from '../../vs/symbols';
+import { spotlightPreset } from '../../core/focus';
 import type { TrailViewFeature } from '../../vs/trailView';
 
 interface TestApi {
   _test: {
+    spotlight: SpotlightController;
     repo: MarkRepository;
     compositor: Compositor;
     markersView: MarkersViewFeature;
@@ -1461,6 +1465,105 @@ suite('SightRead integration', () => {
     assert.ok(leaf, 'the self-occurrence should be projected as a recursion leaf');
     assert.ok(String(trail.getTreeItem(leaf!).description).includes('↻'));
     trail.clear();
+  });
+
+  test('spotlight master toggle preserves all configured effects', async () => {
+    const controller = (await getApi())._test.spotlight;
+    const original = controller.currentOptions;
+    try {
+      const options = { ...spotlightPreset(2), keepFunctionDeclarations: true,
+        keepRelatedFunctionDeclarations: true };
+      await controller.setOptions(options);
+      await vscode.commands.executeCommand('sightread.spotlightToggle');
+      assert.deepStrictEqual(controller.currentOptions, { ...options, enabled: false });
+      await vscode.commands.executeCommand('sightread.spotlightToggle');
+      assert.deepStrictEqual(controller.currentOptions, options);
+    } finally { await controller.setOptions(original); }
+  });
+
+  test('spotlight QuickPick commits the master checkbox and cancels draft changes on Escape', async () => {
+    const controller = (await getApi())._test.spotlight;
+    const original = controller.currentOptions;
+    try {
+      const options = spotlightPreset(3);
+      await controller.setOptions(options);
+      const accepted = vscode.commands.executeCommand('sightread.spotlightSelect');
+      await sleep(250);
+      await vscode.commands.executeCommand('workbench.action.quickPickManyToggle');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await accepted;
+      assert.deepStrictEqual(controller.currentOptions, { ...options, enabled: false });
+      const cancelled = vscode.commands.executeCommand('sightread.spotlightSelect');
+      await sleep(250);
+      await vscode.commands.executeCommand('workbench.action.quickPickManyToggle');
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await cancelled;
+      assert.deepStrictEqual(controller.currentOptions, { ...options, enabled: false });
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await controller.setOptions(original);
+    }
+  });
+
+  test('spotlight keeps nested definition lines bright when outside dimming is disabled', async function () {
+    this.timeout(15000);
+    const api = await getApi();
+    const controller = api._test.spotlight;
+    const original = controller.currentOptions;
+    const doc = await vscode.workspace.openTextDocument({ language: 'javascript', content: [
+      'function outer() {', '  const x = 1;', '',
+      '  function inner() {', '    return x;', '  }', '',
+      '  return inner();', '}', '', 'function other() {', '  return 2;', '}',
+    ].join('\n') });
+    const editor = await vscode.window.showTextDocument(doc);
+    try {
+      await controller.setOptions({ ...spotlightPreset(2), dimOutsideFunction: false,
+        keepInnerFunctionDeclarations: true });
+      let spot: SpotlightRender | undefined;
+      for (let i = 0; i < 40; i++) {
+        editor.selection = new vscode.Selection(1, 8 + i % 2, 1, 8 + i % 2);
+        await sleep(200);
+        spot = api._test.compositor.getTransient(doc.uri)?.spotlight;
+        if (spot?.lit.some((range) => range.start <= 3 && range.end >= 3) &&
+          !spot.lit.some((range) => range.start <= 4 && range.end >= 4)) { break; }
+      }
+      assert.ok(spot?.lit.some((range) => range.start <= 3 && range.end >= 3), 'nested definition is bright');
+      assert.ok(!spot?.lit.some((range) => range.start <= 4 && range.end >= 4), 'nested body stays dim');
+    } finally { await controller.setOptions(original); }
+  });
+
+  test('spotlight retains related declarations with variable tint disabled', async function () {
+    this.timeout(15000);
+    const api = await getApi();
+    const controller = api._test.spotlight;
+    const original = controller.currentOptions;
+    const config = vscode.workspace.getConfiguration('sightread');
+    const originalTint = config.inspect<boolean>('variableTint.enabled')?.globalValue;
+    const doc = await vscode.workspace.openTextDocument({ language: 'javascript', content: [
+      'function caller() {', '  target();', '', '  other();', '}', '',
+      'function target() {', '  return 1;', '}', '',
+      'function other() {', '  return 2;', '}',
+    ].join('\n') });
+    const editor = await vscode.window.showTextDocument(doc);
+    try {
+      await config.update('variableTint.enabled', false, vscode.ConfigurationTarget.Global);
+      await controller.setOptions({ ...spotlightPreset(2), keepRelatedFunctionDeclarations: true });
+      let spot: SpotlightRender | undefined;
+      for (let i = 0; i < 40; i++) {
+        editor.selection = new vscode.Selection(1, 4, 1, 4);
+        await sleep(200);
+        spot = api._test.compositor.getTransient(doc.uri)?.spotlight;
+        if (spot?.lit.some((range) => range.start <= 6 && range.end >= 6)) { break; }
+      }
+      assert.ok(spot?.lit.some((range) => range.start <= 6 && range.end >= 6), 'related target declaration stays bright');
+      assert.ok(!spot?.lit.some((range) => range.start <= 10 && range.end >= 10), 'unrelated declaration stays dim');
+      assert.deepStrictEqual(api._test.compositor.getTransient(doc.uri)?.tint, []);
+      const declarations = await findFunctionDeclarations(doc);
+      assert.ok(declarations.some((declaration) => declaration.header.start === 6));
+    } finally {
+      await controller.setOptions(original);
+      await config.update('variableTint.enabled', originalTint, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test('spotlight switches through every level without error', async () => {

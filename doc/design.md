@@ -85,13 +85,17 @@
 
 ### 3.5 聚光灯（spotlight）
 
-三档退化阶梯，每档只比上一档多一个数据依赖：
+使用原生多选 QuickPick，一次确认组合：
 
-| 档 | 焦点集合 | 依赖 |
-|----|---------|------|
-| 1 Function | 当前函数；函数外重灰 | DocumentSymbol |
-| 2 Segment | 基于段落树的四档着色（见下） | + 自动切段 |
-| 3 Segment+Var | 二档 ∪ 当前 symbol occurrence 所在的最深节点 | + 变量染色 |
+- 顶部：启用 Spotlight（独立总开关）。
+- 压暗：当前函数外代码、函数内其他段落。
+- 保持明亮：其他函数声明行、内部嵌套函数声明行、当前符号的关联段落、相关函数声明行。
+
+明亮例外优先，取并集，不自动取消其他勾选。外部声明与内部嵌套声明分别控制，相关函数声明可位于内外两处；三者取并集，仅保留声明行，不点亮函数体。当前符号包括变量、参数和函数；相关声明指声明该符号或包含其引用的函数声明行。关联段落沿用当前函数与外层函数段落树，不做调用链分析。
+
+Segments message 仅显示 `Spotlight On/Off · ↖ in function/outside function`；状态栏也只显示 Spotlight On/Off，具体勾选项在 QuickPick 中查看。
+
+Enter 保存并应用，Esc 取消草稿。总开关与效果一起保存到 workspaceState；关闭保留组合，重启恢复。状态栏眼睛直接切总开关，`⌘K L` 与 Segments 标题按钮打开配置。旧档位命令仍可调用为预设；defaultMode 仅初始化未保存过的工作区。关联效果不依赖变量染色开关。
 
 **四档着色**（2026-07-07 第二版，随段落树递归化引入）——光标落在树的某个节点上时：
 
@@ -104,8 +108,6 @@
 
 - 切段失灵（无段落/光标在段落间隙）→ 自动退化为一档行为。
 - 光标驱动 + 防抖（~120ms）；焦点抖动的保持策略留待原型体感调参。
-- 入口在 **Segments 视图标题栏的 👁 按钮**与**状态栏的 👁 项**（显示当前档位，点击开档位选择器）；当前档位常驻 **Segments 视图的 message 行**（`◈ Seg+Var · ↖ in function` / `◇ Off · ↖ outside function`——◇/◈ 一对认 spotlight 开关：空心=Off、菱中带点=聚焦中；↖ 认光标字段；TreeView.message 是纯字符串、不渲染 codicon；◉/○/◎ 圆形字形与字母难分、彩色 emoji 与 codicon 图标语言相抵、眼睛字形连 U+FE0E 都压不住照样出彩色，均实测被否）。
-- `sightread.spotlight.defaultMode`：启动时应用的默认档位（off / seg+var / seg / fn，默认 off）。
 
 ### 3.6 入口点（entry points，2026-07-09；2026-08-11 视图退役为引擎；2026-08-12 视图回归+模块层）
 
@@ -207,7 +209,7 @@ src/
     segmentCache.ts   按文档版本缓存的切段结果
     highlighter.ts    标记命令（五色直达 + 选色/带注）+ 编辑跟踪
     variableTint.ts   occurrence 获取与降级
-    spotlight.ts      聚光灯档位状态 + 焦点计算入口
+    spotlight.ts      聚光灯效果状态、QuickPick + 焦点计算入口
     skeletonFold.ts   折叠命令对
     segmentsView.ts   Segments 树视图（光标联动 + 亮暗镜像）+ Go to Segment
     markersView.ts    Markers 树视图（按文件分组，guide 壳 + loose 标记行序混排）

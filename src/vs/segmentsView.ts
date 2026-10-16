@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { SPOTLIGHT_LEVEL_SHORT, SpotlightLevel, intersectsAny, pathToLine } from '../core/focus';
+import { SpotlightOptions, spotlightLabel, spotlightPreset, intersectsAny, pathToLine } from '../core/focus';
 import { Mark, markVisible, marksInLineRange, removeMarksInRange } from '../core/marks';
 import { SegmentKind } from '../core/segmentation';
 import { Compositor, SpotlightRender } from './compositor';
@@ -104,8 +104,8 @@ export class SegmentsViewFeature
   readonly onDidChangeFileDecorations = this.decoEmitter.event;
   private subscriptions: vscode.Disposable[] = [];
 
-  /** current spotlight level — always shown in the view message */
-  private spotlightLevel: SpotlightLevel = 0;
+  /** Current persisted combination, shown independently of computed dim regions. */
+  private spotlightOptions = spotlightPreset(0);
 
   constructor(
     private repo: MarkRepository,
@@ -182,9 +182,9 @@ export class SegmentsViewFeature
     this.emitter.fire();
   }
 
-  /** Spotlight level lives in the view message — the always-visible mode line. */
-  setSpotlightLevel(level: SpotlightLevel): void {
-    this.spotlightLevel = level;
+  /** The view message shows the master switch and cursor context. */
+  setSpotlightOptions(options: SpotlightOptions): void {
+    this.spotlightOptions = options;
     this.syncMessage();
   }
 
@@ -193,9 +193,9 @@ export class SegmentsViewFeature
    *  tree-view messages (plain string only); eye glyphs come out as color emoji
    *  on some font chains, and circle glyphs read as letters — diamonds don't. */
   private syncMessage(): void {
-    const glyph = this.spotlightLevel === 0 ? '◇' : '◈';
-    const level = SPOTLIGHT_LEVEL_SHORT[this.spotlightLevel];
-    this.view.message = `${glyph} ${level} · ↖ ${this.current ? 'in function' : 'outside function'}`;
+    const glyph = this.spotlightOptions.enabled ? '◈' : '◇';
+    const summary = spotlightLabel(this.spotlightOptions);
+    this.view.message = `${glyph} ${summary} · ↖ ${this.current ? 'in function' : 'outside function'}`;
   }
 
   update(

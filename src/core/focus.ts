@@ -22,11 +22,6 @@ export interface LineRange {
 
 export type SpotlightLevel = 0 | 1 | 2 | 3;
 
-export const SPOTLIGHT_LEVEL_NAMES = ['Off', 'Function', 'Segment', 'Segment+Var'] as const;
-
-/** Compact forms for the Segments view's one-line message. */
-export const SPOTLIGHT_LEVEL_SHORT = ['Off', 'Fn', 'Seg', 'Seg+Var'] as const;
-
 export interface FocusTiers {
   /** fully lit ranges */
   lit: LineRange[];
@@ -164,4 +159,71 @@ export function computeFocus(
     litMerged,
   );
   return { lit: litMerged, light };
+}
+
+/** Dimming targets and bright exceptions are independent of the master switch. */
+export interface SpotlightOptions {
+  enabled: boolean;
+  dimOutsideFunction: boolean;
+  dimUnrelatedSegments: boolean;
+  keepFunctionDeclarations: boolean;
+  keepInnerFunctionDeclarations: boolean;
+  keepRelatedSegments: boolean;
+  keepRelatedFunctionDeclarations: boolean;
+}
+
+export interface FunctionDeclaration {
+  range: LineRange;
+  header: LineRange;
+}
+
+/** Bright exceptions combine across outside, nested, and symbol-related declarations. */
+export function computeSpotlightFocus(
+  options: SpotlightOptions,
+  fn: LineRange,
+  tree: SegmentNode[],
+  cursorLine: number,
+  occurrenceLines: number[],
+  declarations: FunctionDeclaration[],
+  lastLine: number,
+  outerTree: SegmentNode[] = [],
+): FocusTiers {
+  if (!options.enabled) {
+    return { lit: [], light: [] };
+  }
+  const base = computeFocus(options.dimUnrelatedSegments
+    ? options.keepRelatedSegments ? 3 : 2 : 1,
+  fn, tree, cursorLine, occurrenceLines, outerTree);
+  const outside = !options.dimOutsideFunction
+    ? subtractRanges({ start: 0, end: lastLine }, [fn]) : [];
+  const islands = options.keepRelatedSegments ? segmentsAtLines(outerTree,
+    occurrenceLines.filter((line) => line < fn.start || line > fn.end)) : [];
+  const headers = declarations.filter((declaration) => {
+    const inner = declaration.range.start > fn.start && declaration.range.end <= fn.end;
+    const outside = declaration.header.end < fn.start || declaration.header.start > fn.end;
+    const related = options.keepRelatedFunctionDeclarations && occurrenceLines.some((line) =>
+      line >= declaration.range.start && line <= declaration.range.end);
+    return (options.keepInnerFunctionDeclarations && inner) ||
+      (options.keepFunctionDeclarations && outside) || related;
+  }).map((declaration) => declaration.header);
+  const lit = mergeLineRanges([...base.lit, ...outside, ...islands, ...headers]);
+  return { lit, light: subtractRangeList(base.light, lit) };
+}
+
+/** Existing direct commands remain presets for the independently configurable effects. */
+export function spotlightPreset(level: SpotlightLevel): SpotlightOptions {
+  return {
+    enabled: level !== 0,
+    dimOutsideFunction: true,
+    dimUnrelatedSegments: level !== 1,
+    keepFunctionDeclarations: false,
+    keepInnerFunctionDeclarations: false,
+    keepRelatedSegments: level === 0 || level === 3,
+    keepRelatedFunctionDeclarations: false,
+  };
+}
+
+/** Compact state for the status bar and Segments view. */
+export function spotlightLabel(options: SpotlightOptions): string {
+  return `Spotlight ${options.enabled ? 'On' : 'Off'}`;
 }

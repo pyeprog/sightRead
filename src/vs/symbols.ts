@@ -7,6 +7,7 @@ import {
   chooseInterpretUnit,
   chooseOutermostFunction,
 } from '../core/enclosing';
+import { FunctionDeclaration } from '../core/focus';
 import { InterpretUnit } from '../core/marks';
 import { stripParens } from '../core/jumpClassify';
 
@@ -243,4 +244,22 @@ export async function resolveInterpretTarget(
     name: path.basename(doc.uri.fsPath),
     range: new vscode.Range(0, 0, doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length),
   };
+}
+
+/** Declaration lines of functions and methods in this document, including nested ones. */
+export async function findFunctionDeclarations(doc: vscode.TextDocument): Promise<FunctionDeclaration[]> {
+  const result: FunctionDeclaration[] = [];
+  const visit = (symbol: vscode.DocumentSymbol | vscode.SymbolInformation): void => {
+    const range = 'location' in symbol ? symbol.location.range : symbol.range;
+    if (FUNCTION_KINDS.has(symbol.kind)) {
+      result.push({
+        range: { start: range.start.line, end: range.end.line },
+        header: { start: range.start.line, end: 'selectionRange' in symbol
+          ? symbol.selectionRange.end.line : range.start.line },
+      });
+    }
+    if ('children' in symbol) { symbol.children.forEach(visit); }
+  };
+  (await documentSymbols(doc)).forEach(visit);
+  return result;
 }

@@ -58,11 +58,7 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 - 🦴 **骨架折叠** —— 快速折叠与展开函数内已有的代码块。读函数时，可以先折叠看函数的大结构，对感兴趣的代码块再展开仔细阅读。
 - 🖍️ **荧光笔（标记）** —— 对于一些难读的、 tricky的代码块，可以先用荧光笔打个标记（`⌘K 1`–`5` 直接落五色之一），也可以在这个标记上写下一个简短的note，标注它是干啥的。手动标记与 AI 解读步骤是同一个模型：同一套渲染、同一个 `Filter Marks…`（任何颜色或角色一键全局隐藏）、同一条编辑规则——编辑只删被碰到的标记，其余各自平移。色板有两条带可选（`sightread.palette`：vivid / soft），深浅主题各有独立取值。
 - 🎯 **变量描边** —— 在函数的上下文里面，把当下光标指向的symbol标出来，方便看当下这个变量是在哪里创建的，又在哪里使用的。
-- 🔦 **聚光灯** —— 排除其他函数、其他无关代码块的视觉干扰。点击状态栏的 👁 按钮，从列表里选一个档位。
-  1. **Function** —— 只看当前函数，其他函数一律dim
-  2. **Segment** —— 只看当前代码块，其他代码块一律dim
-  3. **Segment+Var** —— 只看当前代码块和相关代码块，其他代码块一律dim，这个模式我用的最多。
-  4. **Off** —— 关闭聚光灯，默认模式。
+- 🔦 **聚光灯** —— 状态栏眼睛直接开关。按 `⌘K L` 或通过 Segments 标题按钮或 `SightRead: Spotlight: Configure Effects…` 打开多选 QuickPick：顶部为总开关，下方“压暗”组可选函数外代码、函数内其他段落；“保持明亮”组可选其他函数声明、内部嵌套函数声明行、当前变量或函数的关联段落、相关函数声明。明亮例外取并集。Enter 保存并应用，Esc 放弃本次修改；总开关关闭后保留各项勾选，配置与开关按工作区记住。
 - 🧩 **自动分代码块** —— 按空行 + 关键词把函数切成**递归结构**，方便在segment窗口展示函数大结构，点击可以跳转到相应代码块。节点旁还会以灰色小字显示压缩后的条件/表达式（悬停可看完整首行）。Segments 面板会跟随光标：光标所在的段自动选中；聚光灯开启时，无关的段在面板里也会像编辑器里一样压暗。
 - 🚪 **入口点** —— 从"外部世界从哪里调进来"开始读文件，而不是从第一行开始读。每个入口声明的上方有一条 CodeLens：`» entry — 3 external refs`，点击即可 peek 这些引用。每个顶层符号按引用位置分类：被其他文件引用 → 入口；只在文件内被引用 → 无 lens；找不到任何引用 → 弱化显示的 `suspected entry`（`activate` 这类框架钩子、路由 handler——或者死代码）。`Go to Entry Point…` 随时列出文件的全部入口；**Entry Points** 视图（默认折叠）在 code review 时把它们常驻在侧边栏——入口类可以展开，列出被外界调用的方法；还有一个 **Module** 组，列出进入整个目录的入口：所有被目录外引用的符号，以及 barrel 再导出的名字。
 - 🧭 **Trail（阅读轨迹）** —— 侧边栏视图，在它打开期间把你的跳转变成调用结构图：跳到定义，被调函数出现在出发函数之下；跳到引用，调用方成为父节点。不做全项目扫描——只记录你真实走过的结构性跳转（每一条都经 definition provider 验证），结构随阅读自然显现。子节点按调用位置排序，并显示它在调用方里被调用的行（`↙ L88`，右键 `Go to Call Site` 一步跳达）；函数体内有荧光笔标记的节点以标记色染色，视图还会跟随光标——你正身处的节点自动选中。轨迹只存在于内存中，关窗即弃。
@@ -92,8 +88,8 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 | `SightRead: Interpret Current (AI)` | AI 就地标注光标处的函数/类/文件，产出带角色的路标 |
 | `SightRead: Find Logic Routes (AI)` | 输入阅读目标，agent 探索仓库并把规划路线（暗色）种进 Trail 视图 |
 | `SightRead: Trace Back to Entries (AI)` | 列出所有能到达光标处代码的入口，铺成 Trail 视图里的链 |
-| `SightRead: Spotlight: Choose Level…` | 从列表选档位，等同点击状态栏的 👁 |
-| `SightRead: Spotlight: Off` / `: Function` / `: Segment` / `: Segment + Variables` | 直接切到某档 |
+| `SightRead: Spotlight: Configure Effects…` | 打开带总开关的效果勾选列表 |
+| `SightRead: Spotlight: Off` / `: Function` / `: Segment` / `: Segment + Variables` | 应用兼容预设；Off 保留勾选 |
 | `SightRead: Toggle Variable Tint` | 开关变量描边 |
 | `SightRead: Go to Segment…` | QuickPick 跳转到当前函数的某个段 |
 | `SightRead: Go to Entry Point…` | QuickPick 跳转到文件的某个入口点 |
@@ -112,7 +108,7 @@ SightRead强化“人的阅读能力“本身，在你的代码上附上一层�
 | `⌘K N` | 给选区打标记，颜色 + 备注 |
 | `⌘K ⌫` | 删除光标/选区碰到的标记 |
 | `⌘K G` | AI 解读当前代码 |
-| `⌘K L` | 选聚光灯档位 |
+| `⌘K L` | 打开聚光灯配置列表 |
 | `⌘K [` / `⌘K ]` | 折叠 / 展开骨架 |
 
 Cursor 用户注意：Cursor 把裸 `⌘K` 绑给了 inline edit，编辑器有焦点时会遮蔽所有 `⌘K` chord——想用这些键位需先改绑 Cursor 的 `⌘K`。
@@ -123,7 +119,7 @@ Cursor 用户注意：Cursor 把裸 `⌘K` 绑给了 inline edit，编辑器有�
 |---|---|---|
 | `sightread.palette` | `vivid` | 所有标记 accent 的色带（`vivid` / `soft`——同色相、彩度更收敛），深浅主题各有取值 |
 | `sightread.marker.notePosition` | `lineEnd` | 标记备注显示在行首还是行尾 |
-| `sightread.spotlight.defaultMode` | `off` | 启动时的聚光灯模式（off / seg+var / seg / fn） |
+| `sightread.spotlight.defaultMode` | `off` | 未保存配置时使用的初始模式（off / seg+var / seg / fn） |
 | `sightread.spotlight.functionDimOpacity` | `0.15` | 函数之外代码的压暗程度 |
 | `sightread.spotlight.segmentDimOpacity` | `0.4` | 函数内无关代码的压暗程度 |
 | `sightread.spotlight.siblingDimOpacity` | `0.6` | 光标所在段的兄弟段的压暗程度 |
